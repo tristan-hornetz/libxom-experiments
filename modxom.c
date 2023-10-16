@@ -17,9 +17,7 @@
 
 struct {
     struct list_head lhead;
-    struct vma* vma;
     loff_t mmap_offset;
-    dma_addr_t dma_handle;
     unsigned int num_pages;
     unsigned int num_refs;
     uintptr_t kaddr;
@@ -51,7 +49,7 @@ static int release_mapping(pxom_mapping mapping) {
         return -EFAULT;
     }
 
-    dma_free_coherent(NULL, mapping->num_pages * PAGE_SIZE, (void*) mapping->kaddr, mapping->dma_handle);
+    kfree((void*) mapping->kaddr);
     return 0;
 }
 
@@ -84,7 +82,7 @@ static int release_process(pxom_process_entry curr_entry){
         release_mapping(curr_mapping);
         last_mapping = curr_mapping;
         curr_mapping = (pxom_mapping) curr_mapping->lhead.next;
-        kfree(curr_mapping);
+        kfree(last_mapping);
     } 
     return 0;
 }
@@ -111,10 +109,11 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
     unsigned long size = (vma->vm_end - vma->vm_start);
     uintptr_t newmem, i;
     int status;
-    dma_addr_t dma_handle;
     pxom_mapping new_mapping;
     pxom_process_entry curr_entry = get_process_entry();
     struct page *page;
+
+    printk(KERN_INFO "[MODXOM] Enter xom_mmap\n");
 
     if (!curr_entry)
         return -EINVAL;
@@ -127,11 +126,13 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
     if (!new_mapping)
         return -ENOMEM;
     
-    newmem = (uintptr_t) dma_alloc_coherent(NULL, size, &dma_handle, GFP_KERNEL);
+    newmem = (uintptr_t) kmalloc(size, GFP_KERNEL);
     if(!newmem){
         kfree(curr_entry);
         return -ENOMEM;
     }
+
+    printk(KERN_INFO "[MODXOM] newmem: %p\n", (void*) newmem);
 
     // Set PG_reserved bit to prevent swapping
     for(i = 0; i < size; i += PAGE_SIZE)
@@ -143,13 +144,12 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
 
     if(status < 0){
         kfree(curr_entry);
-        dma_free_coherent(NULL, size, (void*) newmem, dma_handle);
+        kfree((void*) newmem);
         return status;
     }
 
     *new_mapping = (xom_mapping) {
         .mmap_offset = f->f_pos,
-        .dma_handle = dma_handle,
         .num_pages = size / PAGE_SIZE,
         .num_refs = 1,
         .kaddr = newmem
