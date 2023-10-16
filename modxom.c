@@ -1,3 +1,4 @@
+#include <asm/page.h>
 #include <linux/stddef.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -20,7 +21,7 @@ struct {
     loff_t mmap_offset;
     unsigned int num_pages;
     unsigned int num_refs;
-    uintptr_t kaddr;
+    unsigned long kaddr;
 } typedef xom_mapping, *pxom_mapping;
 
 struct {
@@ -32,7 +33,7 @@ struct {
 LIST_HEAD(xom_entries);
 
 static int release_mapping(pxom_mapping mapping) {
-    uintptr_t i;
+    unsigned long i;
     struct vm_area_struct* vma = find_vma(current->mm, mapping->kaddr);
     unsigned long vm_flags;
 
@@ -49,7 +50,7 @@ static int release_mapping(pxom_mapping mapping) {
         return -EFAULT;
     }
 
-    kfree((void*) mapping->kaddr);
+    __free_pages(virt_to_page(mapping->kaddr), get_order(mapping->num_pages * PAGE_SIZE));
     return 0;
 }
 
@@ -107,11 +108,11 @@ int	xom_release(struct inode *, struct file *){
 
 int	xom_mmap(struct file * f, struct vm_area_struct * vma){
     unsigned long size = (vma->vm_end - vma->vm_start);
-    uintptr_t newmem, i;
+    void* newmem = 0;
+    unsigned int i;
     int status;
     pxom_mapping new_mapping;
     pxom_process_entry curr_entry = get_process_entry();
-    struct page *page;
 
     printk(KERN_INFO "[MODXOM] Enter xom_mmap\n");
 
@@ -126,25 +127,23 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
     if (!new_mapping)
         return -ENOMEM;
     
-    newmem = (uintptr_t) kmalloc(size, GFP_KERNEL);
+    newmem = (void*) __get_free_pages(GFP_KERNEL, get_order(size));
     if(!newmem){
         kfree(curr_entry);
         return -ENOMEM;
     }
 
-    printk(KERN_INFO "[MODXOM] newmem: %p\n", (void*) newmem);
-
     // Set PG_reserved bit to prevent swapping
     for(i = 0; i < size; i += PAGE_SIZE)
         SetPageReserved(virt_to_page(newmem + i));
 
-    page = virt_to_page(newmem);
-    status = remap_pfn_range(vma, vma->vm_start, page_to_pfn(page), size, 
-        (pgprot_t){(vma->vm_page_prot.pgprot) | VM_DONTCOPY | VM_DONTDUMP | VM_DONTEXPAND});
+    memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
+
+    status = remap_pfn_range(vma, vma->vm_start, page_to_pfn(virt_to_page(newmem)), size, vma->vm_page_prot);
 
     if(status < 0){
         kfree(curr_entry);
-        kfree((void*) newmem);
+        __free_pages(virt_to_page(newmem), get_order(size));
         return status;
     }
 
@@ -152,7 +151,7 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
         .mmap_offset = f->f_pos,
         .num_pages = size / PAGE_SIZE,
         .num_refs = 1,
-        .kaddr = newmem
+        .kaddr = (unsigned long) newmem
     };
 
     list_add(&(new_mapping->lhead), &(curr_entry->mappings));
