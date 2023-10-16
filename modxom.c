@@ -42,7 +42,7 @@ static int release_mapping(pxom_mapping mapping) {
 
     vm_flags = vma->vm_flags | VM_DONTEXPAND | VM_DONTDUMP;
 
-    for(i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
+    for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
         ClearPageReserved(virt_to_page(mapping->kaddr + i));
 
     if (remap_pfn_range(vma, mapping->kaddr, 0, mapping->num_pages * PAGE_SIZE, (pgprot_t){vm_flags})) {
@@ -205,5 +205,5 @@ MODXOM_exit(void) {
 module_init(MODXOM_init);
 module_exit(MODXOM_exit);
 
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("MIT");
 
