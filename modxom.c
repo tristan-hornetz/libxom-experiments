@@ -46,7 +46,7 @@ static int release_mapping(pxom_mapping mapping) {
         ClearPageReserved(virt_to_page(mapping->kaddr + i));
 
     if (remap_pfn_range(vma, mapping->kaddr, 0, mapping->num_pages * PAGE_SIZE, (pgprot_t){vm_flags})) {
-        printk(KERN_ERR "Failed to unmap kernel pages from user space\n");
+        printk(KERN_ERR "Failed to unmap pages from user space\n");
         return -EFAULT;
     }
 
@@ -88,6 +88,72 @@ static int release_process(pxom_process_entry curr_entry){
     return 0;
 }
 
+static int verify_offset(pxom_process_entry curr_entry, loff_t offset){
+    pxom_mapping last_mapping = (pxom_mapping) curr_entry->mappings.prev;
+
+    if((void*)last_mapping == &(curr_entry->mappings))
+        return 1;
+    
+    if(offset < last_mapping->mmap_offset + (last_mapping->num_pages * PAGE_SIZE))
+        return 0;
+    
+    return 1;
+}
+
+
+static pxom_mapping get_new_mapping(struct file * f, struct vm_area_struct * vma, pxom_process_entry curr_entry) {
+    unsigned long size = (vma->vm_end - vma->vm_start);
+    void* newmem = NULL;
+    unsigned int i;
+    int status;
+    pxom_mapping new_mapping = NULL;
+
+    if (!curr_entry)
+        return NULL;
+
+    // Must be page-aligned
+    if (size % PAGE_SIZE || vma->vm_start % PAGE_SIZE || !size)
+        return NULL;
+    
+    if(!verify_offset(curr_entry, f->f_pos))
+        return NULL;
+
+    new_mapping = kmalloc(sizeof(*new_mapping), GFP_KERNEL);
+    if (!new_mapping)
+        return NULL;
+    
+    newmem = (void*) __get_free_pages(GFP_KERNEL, get_order(size));
+    if(!newmem)
+        goto fail;
+
+    // Set PG_reserved bit to prevent swapping
+    for(i = 0; i < size; i += PAGE_SIZE)
+        SetPageReserved(virt_to_page(newmem + i));
+
+    memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
+
+    status = remap_pfn_range(vma, vma->vm_start, page_to_pfn(virt_to_page(newmem)), size, vma->vm_page_prot);
+
+    if(status < 0)
+        goto fail;
+    
+    *new_mapping = (xom_mapping) {
+        .mmap_offset = f->f_pos,
+        .num_pages = size / PAGE_SIZE,
+        .num_refs = 1,
+        .kaddr = (unsigned long) newmem
+    };
+
+    return new_mapping;
+
+fail:
+    if(curr_entry)
+        kfree(curr_entry);
+    if(newmem)
+        __free_pages(virt_to_page(newmem), get_order(size));
+    return NULL;
+}
+
 int	xom_open(struct inode *, struct file *) {
     pxom_process_entry new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
     new_entry->pid = current->pid;
@@ -107,56 +173,15 @@ int	xom_release(struct inode *, struct file *){
 }
 
 int	xom_mmap(struct file * f, struct vm_area_struct * vma){
-    unsigned long size = (vma->vm_end - vma->vm_start);
-    void* newmem = 0;
-    unsigned int i;
-    int status;
-    pxom_mapping new_mapping;
     pxom_process_entry curr_entry = get_process_entry();
+    pxom_mapping new_mapping = get_new_mapping(f, vma, curr_entry);
 
-    printk(KERN_INFO "[MODXOM] Enter xom_mmap\n");
-
-    if (!curr_entry)
+    if(!new_mapping)
         return -EINVAL;
-
-    // Must be page-aligned
-    if (size % PAGE_SIZE || vma->vm_start % PAGE_SIZE || !size)
-        return -EINVAL;
-
-    new_mapping = kmalloc(sizeof(*new_mapping), GFP_KERNEL);
-    if (!new_mapping)
-        return -ENOMEM;
-    
-    newmem = (void*) __get_free_pages(GFP_KERNEL, get_order(size));
-    if(!newmem){
-        kfree(curr_entry);
-        return -ENOMEM;
-    }
-
-    // Set PG_reserved bit to prevent swapping
-    for(i = 0; i < size; i += PAGE_SIZE)
-        SetPageReserved(virt_to_page(newmem + i));
-
-    memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
-
-    status = remap_pfn_range(vma, vma->vm_start, page_to_pfn(virt_to_page(newmem)), size, vma->vm_page_prot);
-
-    if(status < 0){
-        kfree(curr_entry);
-        __free_pages(virt_to_page(newmem), get_order(size));
-        return status;
-    }
-
-    *new_mapping = (xom_mapping) {
-        .mmap_offset = f->f_pos,
-        .num_pages = size / PAGE_SIZE,
-        .num_refs = 1,
-        .kaddr = (unsigned long) newmem
-    };
 
     list_add(&(new_mapping->lhead), &(curr_entry->mappings));
 
-    return status;
+    return 0;
 }
 
 ssize_t	xom_read(struct file * _f, char __user * _user_mem, size_t _len, loff_t * _offest){
