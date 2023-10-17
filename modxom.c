@@ -12,6 +12,7 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/list.h>
+#include <linux/mutex.h>
 
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #define MODXOM_PROC_FILE_NAME "xom"
@@ -35,11 +36,12 @@ struct
 } typedef xom_process_entry, *pxom_process_entry;
 
 LIST_HEAD(xom_entries);
+static struct mutex file_lock;
+
 
 static int release_mapping(pxom_mapping mapping)
 {
     unsigned long i;
-    struct vm_area_struct *vma;
     struct page *page = virt_to_page(mapping->kaddr);
 
     if (!page)
@@ -49,10 +51,8 @@ static int release_mapping(pxom_mapping mapping)
         ClearPageReserved(virt_to_page(mapping->kaddr + i));
 
     // Don't mess with a dying processes address space
-    if (!(current->flags & PF_EXITING))
-    {
-        vma = find_vma(current->mm, mapping->uaddr);
-        if(vm_munmap(vma->vm_start, mapping->num_pages * PAGE_SIZE))
+    if (!(current->flags & PF_EXITING)) {
+        if(vm_munmap(mapping->uaddr, mapping->num_pages * PAGE_SIZE))
             return -EFAULT;
     }
 
@@ -156,41 +156,58 @@ int xom_open(struct inode *, struct file *)
     pxom_process_entry new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
     new_entry->pid = current->pid;
     INIT_LIST_HEAD(&(new_entry->mappings));
+    mutex_lock(&file_lock);
     list_add(&(new_entry->lhead), &xom_entries);
+    mutex_unlock(&file_lock);
     return 0;
 }
 
 int xom_release(struct inode *, struct file *)
 {
     int status;
-    pxom_process_entry curr_entry = get_process_entry();
+    pxom_process_entry curr_entry;
 
+    mutex_lock(&file_lock);
+    curr_entry = get_process_entry();
     status = release_process(curr_entry);
     list_del(&(curr_entry->lhead));
     kfree(curr_entry);
+    mutex_unlock(&file_lock);
+
     return status;
 }
 
 int xom_mmap(struct file *f, struct vm_area_struct *vma)
 {
-    pxom_process_entry curr_entry = get_process_entry();
-    pxom_mapping new_mapping = get_new_mapping(vma, curr_entry);
+    int status = 0;
+    pxom_process_entry curr_entry;
+    pxom_mapping new_mapping;
+
+    mutex_lock(&file_lock);
+
+    curr_entry = get_process_entry();
+    new_mapping = get_new_mapping(vma, curr_entry);
 
     if (!new_mapping)
-        return -EINVAL;
+        status = -EINVAL;
+    else
+        list_add(&(new_mapping->lhead), &(curr_entry->mappings));
 
-    list_add(&(new_mapping->lhead), &(curr_entry->mappings));
-    return 0;
+    mutex_unlock(&file_lock);
+    return status;
 }
 
 ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offset)
 {
     size_t len_reqired = sizeof(READ_HEADER_STRING), index, clen;
     char *dstring;
-    pxom_process_entry curr_entry = get_process_entry();
+    pxom_process_entry curr_entry;
     pxom_mapping curr_mapping;
     struct vm_area_struct *vma;
 
+    mutex_lock(&file_lock);
+
+    curr_entry = get_process_entry();
     curr_mapping = (pxom_mapping)curr_entry->mappings.next;
     while ((void *)curr_mapping != &(curr_entry->mappings))
     {
@@ -227,6 +244,7 @@ ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offs
     *offset += clen;
     kvfree(dstring);
 
+    mutex_unlock(&file_lock);
     return clen;
 }
 
@@ -249,6 +267,7 @@ MODXOM_init(void)
     struct proc_dir_entry *entry;
     printk(KERN_INFO
            "[MODXOM] Hello World!\n");
+    mutex_init(&file_lock);
     entry = proc_create(MODXOM_PROC_FILE_NAME, 0666, NULL, &file_ops);
     printk(KERN_INFO
            "[MODXOM] MODXOM Kernel Module loaded!\n");
@@ -268,6 +287,7 @@ MODXOM_exit(void)
     }
 
     remove_proc_entry(MODXOM_PROC_FILE_NAME, NULL);
+    mutex_destroy(&file_lock);
     printk(KERN_INFO
            "[MODXOM] MODXOM Kernel Module unloaded. Goodbye!\n");
 }
