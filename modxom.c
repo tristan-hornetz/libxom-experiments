@@ -12,9 +12,11 @@
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/list.h>
-#include <linux/dma-mapping.h>
 
-#define MODXOM_PROC_FILE_NAME "xom"
+#define MIN(X, Y)               ((X) < (Y) ? (X) : (Y))
+#define MODXOM_PROC_FILE_NAME   "xom"
+#define READ_HEADER_STRING      "        Address:             Size:      File-Offset:\n"
+#define MAPPING_LINE_SIZE       ((3 * (2 * sizeof(size_t) + 2)) + 5)
 
 struct {
     struct list_head lhead;
@@ -22,6 +24,7 @@ struct {
     unsigned int num_pages;
     unsigned int num_refs;
     unsigned long kaddr;
+    unsigned long uaddr;
 } typedef xom_mapping, *pxom_mapping;
 
 struct {
@@ -33,24 +36,28 @@ struct {
 LIST_HEAD(xom_entries);
 
 static int release_mapping(pxom_mapping mapping) {
-    unsigned long i;
-    struct vm_area_struct* vma = find_vma(current->mm, mapping->kaddr);
-    unsigned long vm_flags;
+    unsigned long i, vm_flags;
+    struct vm_area_struct* vma;
+    struct page* page = virt_to_page(mapping->kaddr);
 
-    if(!vma)
+    if(!page)
         return -EFAULT;
-
-    vm_flags = vma->vm_flags | VM_DONTEXPAND | VM_DONTDUMP;
 
     for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
         ClearPageReserved(virt_to_page(mapping->kaddr + i));
 
-    if (remap_pfn_range(vma, mapping->kaddr, 0, mapping->num_pages * PAGE_SIZE, (pgprot_t){vm_flags})) {
-        printk(KERN_ERR "Failed to unmap pages from user space\n");
-        return -EFAULT;
+    // Don't mess with a dying processes address space
+    if(!(current->flags & PF_EXITING)){
+        vma = find_vma(current->mm, mapping->uaddr);
+        vm_flags = vma->vm_flags | VM_DONTEXPAND | VM_DONTDUMP;
+        if (remap_pfn_range(vma, vma->vm_start, 0, mapping->num_pages * PAGE_SIZE, (pgprot_t){vm_flags})) {
+            printk(KERN_ERR "Failed to unmap pages from user space\n");
+            return -EFAULT;
+        }
     }
-
-    __free_pages(virt_to_page(mapping->kaddr), get_order(mapping->num_pages * PAGE_SIZE));
+    
+    for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
+        __free_page(virt_to_page(mapping->kaddr + i));
     return 0;
 }
 
@@ -123,7 +130,7 @@ static pxom_mapping get_new_mapping(struct file * f, struct vm_area_struct * vma
         return NULL;
     
     newmem = (void*) __get_free_pages(GFP_KERNEL, get_order(size));
-    if(!newmem)
+    if(!newmem || (ssize_t) newmem == -1)
         goto fail;
 
     // Set PG_reserved bit to prevent swapping
@@ -141,7 +148,8 @@ static pxom_mapping get_new_mapping(struct file * f, struct vm_area_struct * vma
         .mmap_offset = f->f_pos,
         .num_pages = size / PAGE_SIZE,
         .num_refs = 1,
-        .kaddr = (unsigned long) newmem
+        .kaddr = (unsigned long) newmem,
+        .uaddr = vma->vm_start
     };
 
     return new_mapping;
@@ -180,16 +188,55 @@ int	xom_mmap(struct file * f, struct vm_area_struct * vma){
         return -EINVAL;
 
     list_add(&(new_mapping->lhead), &(curr_entry->mappings));
-
     return 0;
 }
 
-ssize_t	xom_read(struct file * _f, char __user * _user_mem, size_t _len, loff_t * _offest){
-    return -ENOTSUPP;
+ssize_t	xom_read(struct file * f, char __user * user_mem, size_t len, loff_t * offset){
+    size_t len_reqired = sizeof(READ_HEADER_STRING), index, clen;
+    char* dstring;
+    pxom_process_entry curr_entry = get_process_entry();
+    pxom_mapping curr_mapping;
+    struct vm_area_struct* vma;
+
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void*)curr_mapping != &(curr_entry->mappings)){
+        len_reqired += MAPPING_LINE_SIZE;
+        curr_mapping = (pxom_mapping) curr_mapping->lhead.next;
+    }
+
+    if(*offset >= len_reqired)
+        return 0;
+
+    dstring = kvmalloc(len_reqired, GFP_KERNEL);
+    if(!dstring)
+        return -ENOMEM;
+    
+    memcpy(dstring, READ_HEADER_STRING, sizeof(READ_HEADER_STRING));
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    index = sizeof(READ_HEADER_STRING) - 1;
+    while ((void*)curr_mapping != &(curr_entry->mappings) && index < len_reqired){
+        vma = find_vma(current->mm, curr_mapping->uaddr);
+        if(!vma) {
+            curr_mapping = (pxom_mapping) curr_mapping->lhead.next;
+            continue;
+        }
+        index += snprintf(dstring + index, len_reqired - index, "%16lx, %16lx, %16lx\n", 
+                    vma->vm_start, vma->vm_end - vma->vm_start, (unsigned long) curr_mapping->mmap_offset);
+        curr_mapping = (pxom_mapping) curr_mapping->lhead.next;
+    }
+
+    
+    clen = MIN(len_reqired - (unsigned long) *offset, len);
+    if(copy_to_user(user_mem, dstring + *offset, clen))
+        clen = 0;
+    *offset += clen;
+    kvfree(dstring);
+
+    return clen;
 }
 
 ssize_t	xom_write(struct file * _f, const char __user * _user_mem, size_t _len, loff_t * _offset){
-    return -ENOTSUPP;
+    return -EINVAL;
 }
 
 const static struct proc_ops file_ops = {
