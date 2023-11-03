@@ -1,4 +1,5 @@
 #include <asm/page.h>
+#include <asm/io.h>
 #include <linux/stddef.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -13,12 +14,21 @@
 #include <linux/mm.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <xen/xen.h>
+#include <asm/xen/hypercall.h>
 #include "modxom.h"
 
-#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#define MMUEXT_MARK_XOM       21
+#define MMUEXT_UNMARK_XOM     22
+
 #define MODXOM_PROC_FILE_NAME "xom"
 #define READ_HEADER_STRING "        Address:             Size:\n"
 #define MAPPING_LINE_SIZE ((2 * (2 * sizeof(size_t) + 2)) + 5)
+#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
+#define page_l_arr_index(pmapping, index) ((pmapping)->lock_status[(index) >> 3])
+#define is_page_locked(pmapping, index)  ((page_l_arr_index(pmapping, index) & (1 << ((index) & 0x7))) ? 1 : 0)
+#define set_lock_status(pmapping, index, val) \
+    page_l_arr_index(pmapping, index) = (page_l_arr_index(pmapping, index) & ~(1 << ((index) & 0x7))) | (((val) ? 1 : 0) << ((index) & 0x7))
 
 struct
 {
@@ -26,6 +36,7 @@ struct
     unsigned int num_pages;
     unsigned long kaddr;
     unsigned long uaddr;
+    uint8_t* lock_status;
 } typedef xom_mapping, *pxom_mapping;
 
 struct
@@ -38,13 +49,81 @@ struct
 LIST_HEAD(xom_entries);
 static struct mutex file_lock;
 
+static bool were_pages_locked(pxom_mapping mapping){
+    unsigned int i;
+    uint8_t ret = 0;
+
+    for(i = 0; i < (mapping->num_pages >> 3) + 1; i++)
+        ret |= mapping->lock_status[i];
+
+    return ret > 0;
+}
+
+// Add or remove hypervisor protection
+static int xen_handle_xom(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
+	int status;
+    struct mmuext_op op;
+    unsigned long kaddr = mapping->kaddr + page_index * PAGE_SIZE;
+    unsigned long cur_kaddr = kaddr, base_kaddr = kaddr;
+    unsigned int page_c, i, pages_locked = 0;
+	phys_addr_t cur_gfn, last_gfn;
+
+    if(!num_pages)
+        return 0;
+    if(page_index + num_pages > mapping->num_pages)
+        return -EINVAL;
+
+    memset(&op, 0, sizeof(op));
+
+    while(cur_kaddr < kaddr + PAGE_SIZE * num_pages){
+        page_c = 0;
+
+        // Group into physically contiguous ranges
+        do{
+            page_c++;
+            cur_kaddr += PAGE_SIZE;
+            last_gfn = cur_gfn;
+            cur_gfn = virt_to_phys((void*) kaddr);
+        } while((last_gfn == cur_gfn + PAGE_SIZE) && (cur_kaddr < kaddr + PAGE_SIZE * num_pages));
+
+        // Perform Hypercall for range
+        op.cmd = set_xom ? MMUEXT_MARK_XOM : MMUEXT_UNMARK_XOM;
+        op.arg1.mfn = virt_to_phys((void*) base_kaddr);
+        op.arg2.nr_ents = page_c;
+        printk(KERN_INFO "[XOM Seal] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
+        status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
+
+        if(status){
+            printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
+            return status;
+        }
+
+        // Update lock status in mapping struct
+        for(i = 0; i < page_c; i++)
+            set_lock_status(mapping, page_index + pages_locked + i, 1);
+        
+        base_kaddr = cur_kaddr;
+        pages_locked += page_c;
+        // Repeat until all physically contiguous ranges are locked
+    }
+
+	return 0;
+}
 
 static int release_mapping(pxom_mapping mapping) {
+    int status;
     unsigned long i;
     struct page *page = virt_to_page(mapping->kaddr);
 
     if (!page)
         return -EFAULT;
+
+
+    if(were_pages_locked(mapping)){
+        status = xen_handle_xom(mapping, 0, mapping->num_pages, false);
+        if(status)
+            return status;
+    }
 
     for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
         ClearPageReserved(virt_to_page(mapping->kaddr + i));
@@ -56,6 +135,11 @@ static int release_mapping(pxom_mapping mapping) {
     }
 
     free_pages(mapping->kaddr, get_order(mapping->num_pages * PAGE_SIZE));
+    if(mapping->lock_status){
+        kfree(mapping->lock_status);
+        mapping->lock_status = NULL;
+    }
+
     return 0;
 }
 
@@ -122,10 +206,38 @@ static int xmem_free(pmodxom_cmd cmd){
     return -EINVAL;
 }
 
+static int lock_pages(pmodxom_cmd cmd){
+    unsigned page_index;
+    pxom_process_entry curr_entry;
+    pxom_mapping curr_mapping;
+
+    curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
+    
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(cmd->base_addr < curr_mapping->uaddr || 
+                cmd->base_addr >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+
+        page_index = (cmd->base_addr - curr_mapping->uaddr) / PAGE_SIZE;
+        
+        if(cmd->base_addr + cmd->num_pages * PAGE_SIZE > curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE) 
+            return -EINVAL;
+        
+        return xen_handle_xom(curr_mapping, page_index, cmd->num_pages, true);
+    }
+    return -EINVAL;
+}
+
 static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_entry curr_entry)
 {
     unsigned long size = (vma->vm_end - vma->vm_start);
     void *newmem = NULL;
+    uint8_t* n_lock_status = NULL;
     unsigned int i;
     int status;
     pxom_mapping new_mapping = NULL;
@@ -141,6 +253,12 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
     new_mapping = kmalloc(sizeof(*new_mapping), GFP_KERNEL);
     if (!new_mapping)
         return NULL;
+    
+    n_lock_status = kmalloc(((size / PAGE_SIZE) >> 3) + 1, GFP_KERNEL);
+    if(!n_lock_status)
+        goto fail;
+
+    memset(n_lock_status, 0, ((size / PAGE_SIZE) >> 3) + 1);
 
     newmem = (void *)__get_free_pages(GFP_KERNEL, get_order(size));
     if (!newmem || (ssize_t)newmem == -1)
@@ -160,13 +278,17 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
     *new_mapping = (xom_mapping){
         .num_pages = size / PAGE_SIZE,
         .kaddr = (unsigned long)newmem,
-        .uaddr = vma->vm_start};
+        .uaddr = vma->vm_start,
+        .lock_status = n_lock_status
+    };
 
     return new_mapping;
 
 fail:
     if (curr_entry)
         kfree(curr_entry);
+    if(n_lock_status)
+        kfree(n_lock_status);
     if (newmem)
         __free_pages(virt_to_page(newmem), get_order(size));
     return NULL;
@@ -203,6 +325,9 @@ int xom_mmap(struct file *f, struct vm_area_struct *vma)
     int status = 0;
     pxom_process_entry curr_entry;
     pxom_mapping new_mapping;
+
+    if(!xen_hvm_domain())
+        return -ENODEV;
 
     mutex_lock(&file_lock);
 
@@ -287,6 +412,8 @@ ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_
             ret = xmem_free(&cmd);
             break;
         case MODXOM_CMD_LOCK:
+            ret = lock_pages(&cmd);
+            break;
         default:;
     }
 
@@ -303,7 +430,7 @@ const static struct proc_ops file_ops = {
     .proc_mmap = xom_mmap
 };
 
-static int __init MODXOM_init(void) {
+static int __init modxom_init(void) {
     struct proc_dir_entry *entry;
     printk(KERN_INFO "[MODXOM] Hello World!\n");
     mutex_init(&file_lock);
@@ -312,7 +439,7 @@ static int __init MODXOM_init(void) {
     return 0;
 }
 
-static void __exit MODXOM_exit(void) {
+static void __exit modxom_exit(void) {
     pxom_process_entry curr_entry = (pxom_process_entry)xom_entries.next, last_entry;
     while ((void *)curr_entry != &xom_entries)
     {
@@ -327,8 +454,8 @@ static void __exit MODXOM_exit(void) {
     printk(KERN_INFO "[MODXOM] MODXOM Kernel Module unloaded. Goodbye!\n");
 }
 
-module_init(MODXOM_init);
-module_exit(MODXOM_exit);
+module_init(modxom_init);
+module_exit(modxom_exit);
 
 MODULE_LICENSE("Dual MIT/GPL");
 MODULE_AUTHOR("Tristan Hornetz");
