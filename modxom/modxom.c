@@ -13,6 +13,7 @@
 #include <linux/mm.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include "modxom.h"
 
 #define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
 #define MODXOM_PROC_FILE_NAME "xom"
@@ -23,7 +24,6 @@ struct
 {
     struct list_head lhead;
     unsigned int num_pages;
-    unsigned int num_refs;
     unsigned long kaddr;
     unsigned long uaddr;
 } typedef xom_mapping, *pxom_mapping;
@@ -84,18 +84,42 @@ static int release_process(pxom_process_entry curr_entry)
 
     while ((void *)curr_mapping != &(curr_entry->mappings))
     {
-        curr_mapping->num_refs--;
-        if (curr_mapping->num_refs > 0)
-        {
-            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
-            continue;
-        }
         release_mapping(curr_mapping);
         last_mapping = curr_mapping;
         curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
         kfree(last_mapping);
     }
     return 0;
+}
+
+static int xmem_free(pmodxom_cmd cmd){
+    int status;
+    pxom_process_entry curr_entry;
+    pxom_mapping curr_mapping;
+
+    curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
+    
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(curr_mapping->uaddr != cmd->base_addr){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+        
+        if(curr_mapping->num_pages != cmd->num_pages)
+            return -EINVAL;
+        
+        status = release_mapping(curr_mapping);
+
+        if(status)
+            return status;
+        list_del(&(curr_mapping->lhead));
+        kfree(curr_mapping);
+        return 0;
+    }
+    return -EINVAL;
 }
 
 static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_entry curr_entry)
@@ -135,7 +159,6 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
 
     *new_mapping = (xom_mapping){
         .num_pages = size / PAGE_SIZE,
-        .num_refs = 1,
         .kaddr = (unsigned long)newmem,
         .uaddr = vma->vm_start};
 
@@ -246,9 +269,30 @@ ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offs
     return clen;
 }
 
-ssize_t xom_write(struct file *_f, const char __user *_user_mem, size_t _len, loff_t *_offset)
+ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_t *offset)
 {
-    return -EINVAL;
+    ssize_t ret = -EINVAL;
+    modxom_cmd cmd;
+    if(len < sizeof(modxom_cmd))
+        return -EINVAL;
+    if(copy_from_user(&cmd, user_mem, sizeof(cmd)))
+        return -EFAULT;
+    
+    mutex_lock(&file_lock);
+    switch(cmd.cmd){
+        case MODXOM_CMD_NOP:
+            ret = sizeof(cmd);
+            break;
+        case MODXOM_CMD_FREE:
+            ret = xmem_free(&cmd);
+            break;
+        case MODXOM_CMD_LOCK:
+        default:;
+    }
+
+    mutex_unlock(&file_lock);
+
+    return ret;
 }
 
 const static struct proc_ops file_ops = {
@@ -261,12 +305,10 @@ const static struct proc_ops file_ops = {
 
 static int __init MODXOM_init(void) {
     struct proc_dir_entry *entry;
-    printk(KERN_INFO
-           "[MODXOM] Hello World!\n");
+    printk(KERN_INFO "[MODXOM] Hello World!\n");
     mutex_init(&file_lock);
     entry = proc_create(MODXOM_PROC_FILE_NAME, 0666, NULL, &file_ops);
-    printk(KERN_INFO
-           "[MODXOM] MODXOM Kernel Module loaded!\n");
+    printk(KERN_INFO "[MODXOM] MODXOM Kernel Module loaded!\n");
     return 0;
 }
 
@@ -282,8 +324,7 @@ static void __exit MODXOM_exit(void) {
 
     remove_proc_entry(MODXOM_PROC_FILE_NAME, NULL);
     mutex_destroy(&file_lock);
-    printk(KERN_INFO
-           "[MODXOM] MODXOM Kernel Module unloaded. Goodbye!\n");
+    printk(KERN_INFO "[MODXOM] MODXOM Kernel Module unloaded. Goodbye!\n");
 }
 
 module_init(MODXOM_init);
