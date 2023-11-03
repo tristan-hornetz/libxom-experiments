@@ -39,8 +39,7 @@ LIST_HEAD(xom_entries);
 static struct mutex file_lock;
 
 
-static int release_mapping(pxom_mapping mapping)
-{
+static int release_mapping(pxom_mapping mapping) {
     unsigned long i;
     struct page *page = virt_to_page(mapping->kaddr);
 
@@ -111,8 +110,7 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
         return NULL;
 
     // Must be page-aligned
-    if (size % PAGE_SIZE || vma->vm_start % PAGE_SIZE || !size)
-    {
+    if (size % PAGE_SIZE || vma->vm_start % PAGE_SIZE || !size) {
         return NULL;
     }
 
@@ -258,12 +256,10 @@ const static struct proc_ops file_ops = {
     .proc_release = xom_release,
     .proc_read = xom_read,
     .proc_write = xom_write,
-    .proc_mmap = xom_mmap,
+    .proc_mmap = xom_mmap
 };
 
-static int __init
-MODXOM_init(void)
-{
+static int __init MODXOM_init(void) {
     struct proc_dir_entry *entry;
     printk(KERN_INFO
            "[MODXOM] Hello World!\n");
@@ -274,9 +270,7 @@ MODXOM_init(void)
     return 0;
 }
 
-static void __exit
-MODXOM_exit(void)
-{
+static void __exit MODXOM_exit(void) {
     pxom_process_entry curr_entry = (pxom_process_entry)xom_entries.next, last_entry;
     while ((void *)curr_entry != &xom_entries)
     {
@@ -295,4 +289,5 @@ MODXOM_exit(void)
 module_init(MODXOM_init);
 module_exit(MODXOM_exit);
 
-MODULE_LICENSE("MIT");
+MODULE_LICENSE("Dual MIT/GPL");
+MODULE_AUTHOR("Tristan Hornetz");
