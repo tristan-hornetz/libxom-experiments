@@ -18,15 +18,16 @@
 #include <asm/xen/hypercall.h>
 #include "modxom.h"
 
-#define MMUEXT_MARK_XOM       21
-#define MMUEXT_UNMARK_XOM     22
+#define MMUEXT_MARK_XOM                         21
+#define MMUEXT_UNMARK_XOM                       22
 
-#define MODXOM_PROC_FILE_NAME "xom"
-#define READ_HEADER_STRING "        Address:             Size:\n"
-#define MAPPING_LINE_SIZE ((2 * (2 * sizeof(size_t) + 2)) + 5)
-#define MIN(X, Y) ((X) < (Y) ? (X) : (Y))
-#define page_l_arr_index(pmapping, index) ((pmapping)->lock_status[(index) >> 3])
-#define is_page_locked(pmapping, index)  ((page_l_arr_index(pmapping, index) & (1 << ((index) & 0x7))) ? 1 : 0)
+#define MODXOM_PROC_FILE_NAME                   "xom"
+#define READ_HEADER_STRING                      "        Address:             Size:\n"
+#define MAPPING_LINE_SIZE                       ((2 * (2 * sizeof(size_t) + 2)) + 5)
+
+#define MIN(X, Y)                               ((X) < (Y) ? (X) : (Y))
+#define page_l_arr_index(pmapping, index)       ((pmapping)->lock_status[(index) >> 3])
+#define is_page_locked(pmapping, index)         ((page_l_arr_index(pmapping, index) & (1 << ((index) & 0x7))) ? 1 : 0)
 #define set_lock_status(pmapping, index, val) \
     page_l_arr_index(pmapping, index) = (page_l_arr_index(pmapping, index) & ~(1 << ((index) & 0x7))) | (((val) ? 1 : 0) << ((index) & 0x7))
 
@@ -60,7 +61,7 @@ static bool were_pages_locked(pxom_mapping mapping){
 }
 
 // Add or remove hypervisor protection
-static int xen_handle_xom(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
+static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
 	int status;
     struct mmuext_op op;
     unsigned long kaddr = mapping->kaddr + page_index * PAGE_SIZE;
@@ -120,7 +121,7 @@ static int release_mapping(pxom_mapping mapping) {
 
 
     if(were_pages_locked(mapping)){
-        status = xen_handle_xom(mapping, 0, mapping->num_pages, false);
+        status = lock_pages_xen(mapping, 0, mapping->num_pages, false);
         if(status)
             return status;
     }
@@ -228,7 +229,7 @@ static int lock_pages(pmodxom_cmd cmd){
         if(cmd->base_addr + cmd->num_pages * PAGE_SIZE > curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE) 
             return -EINVAL;
         
-        return xen_handle_xom(curr_mapping, page_index, cmd->num_pages, true);
+        return lock_pages_xen(curr_mapping, page_index, cmd->num_pages, true);
     }
     return -EINVAL;
 }
