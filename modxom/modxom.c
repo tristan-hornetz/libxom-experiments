@@ -69,7 +69,7 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
     unsigned long kaddr = mapping->kaddr + (page_index * PAGE_SIZE);
     unsigned long cur_kaddr = kaddr, base_kaddr = kaddr;
     unsigned int page_c, i, pages_locked = 0;
-	phys_addr_t cur_gfn, last_gfn;
+	unsigned long cur_gfn = page_to_pfn(virt_to_page((void*) base_kaddr)), last_gfn;
 
     if(!num_pages)
         return 0;
@@ -86,8 +86,8 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
             page_c++;
             cur_kaddr += PAGE_SIZE;
             last_gfn = cur_gfn;
-            cur_gfn = virt_to_phys((void*) cur_kaddr);
-        } while((last_gfn == cur_gfn + PAGE_SIZE) && (cur_kaddr < kaddr + (PAGE_SIZE * num_pages)));
+            cur_gfn = page_to_pfn(virt_to_page((void*) cur_kaddr));
+        } while((last_gfn == cur_gfn - 1) && (cur_kaddr < kaddr + (PAGE_SIZE * num_pages)));
 
         // Perform Hypercall for range
         op.cmd = set_xom ? MMUEXT_MARK_XOM : MMUEXT_UNMARK_XOM;
@@ -95,7 +95,6 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         op.arg2.nr_ents = page_c;
         printk(KERN_INFO "[XOM Seal] Invoking Hypervisor with mfn 0x%lx for %u pages -> 0x%lx\n", op.arg1.mfn, op.arg2.nr_ents, set_xom ? *(unsigned long*)base_kaddr : 0x88);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
-
         if(status){
             printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
             return status;
@@ -279,7 +278,7 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
     //if (mmap_write_lock_killable(vma->vm_mm))
 	//	goto fail;
     pfn = (pfn_t){page_to_pfn(virt_to_page(newmem))};
-    status = remap_pfn_range(vma, vma->vm_start, pfn.val, size, PAGE_SHARED_EXEC);
+    status = remap_pfn_range(vma, vma->vm_start, pfn.val, size, PAGE_SHARED);
     //mmap_write_unlock(vma->vm_mm);
 
     if (status < 0)

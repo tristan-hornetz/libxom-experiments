@@ -9,10 +9,19 @@
 #define MODXOM_CMD_FREE     1
 #define MODXOM_CMD_LOCK     2
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct {
     uint32_t cmd;
     uint32_t num_pages;
     uintptr_t base_addr;
 } typedef modxom_cmd, *pmodxom_cmd;
+
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif
