@@ -89,7 +89,7 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
 
         // Perform Hypercall for range
         op.cmd = set_xom ? MMUEXT_MARK_XOM : MMUEXT_UNMARK_XOM;
-        op.arg1.mfn = virt_to_phys((void*) base_kaddr);
+        op.arg1.mfn = page_to_pfn(virt_to_page((void*) base_kaddr));
         op.arg2.nr_ents = page_c;
         printk(KERN_INFO "[XOM Seal] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
