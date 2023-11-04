@@ -83,9 +83,6 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
 
         // Group into physically contiguous ranges
         do{
-            // All pages in the specified reach must change their lock status
-            if(is_page_locked(mapping, page_index + pages_locked + page_c) == set_xom)
-                return -EINVAL;
             page_c++;
             cur_kaddr += PAGE_SIZE;
             last_gfn = cur_gfn;
