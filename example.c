@@ -58,6 +58,7 @@ int main(){
     }
 
     printf("Attempting to print something: ");
+    fflush(stdout);
     if(!setjmp(longjmp_buf))
         print_protected(msg, sizeof(msg));
     else
