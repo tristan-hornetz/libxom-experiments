@@ -11,7 +11,7 @@ struct xombuf;
 
 struct xombuf* xomalloc(size_t size);
 size_t xom_get_size(struct xombuf*);
-int xom_write(struct xombuf* dest, const unsigned char* src, const size_t size);
+int xom_write(struct xombuf* dest, const void *const src, const size_t size);
 void* xom_lock(struct xombuf*);
 void xom_free(struct xombuf*);
 

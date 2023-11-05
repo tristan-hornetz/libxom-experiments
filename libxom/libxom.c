@@ -64,7 +64,7 @@ static inline p_xombuf xomalloc_internal(size_t size){
     }
 
     ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
-    if(!ret->address)
+    if(!ret->address || !~(uintptr_t)ret->address)
         return NULL;
     
     ret->allocated_size = size;
@@ -72,7 +72,7 @@ static inline p_xombuf xomalloc_internal(size_t size){
     return ret;
 }
 
-static inline int xom_write_internal(struct xombuf* dest, const unsigned char* src, const size_t size){
+static inline int xom_write_internal(struct xombuf* dest, const void *const src, const size_t size){
     if(!dest || !src || !size){
         errno = EINVAL;
         return -1;
@@ -133,7 +133,7 @@ size_t xom_get_size(struct xombuf* buf){
     return buf->allocated_size;
 }
 
-int xom_write(struct xombuf* dest, const unsigned char* src, const size_t size){
+int xom_write(struct xombuf* dest, const void *const src, const size_t size){
     wrap_call(int, xom_write_internal(dest, src, size));
 }
 
