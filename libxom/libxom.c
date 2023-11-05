@@ -10,7 +10,7 @@
 
 #define PAGE_SIZE   0x1000
 #define PAGE_SHIFT  12
-#define SIZE_CEIL(S) (((S) & ~(PAGE_SIZE - 1)) + (((S) & ~(PAGE_SIZE - 1)) ? PAGE_SIZE : 0))
+#define SIZE_CEIL(S) ((((S) >> PAGE_SHIFT) + ((S) & ~(PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 
 struct xombuf {
     void* address;
