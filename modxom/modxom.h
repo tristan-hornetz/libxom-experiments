@@ -5,9 +5,10 @@
 #include <stdint.h>
 #endif
 
-#define MODXOM_CMD_NOP      0
-#define MODXOM_CMD_FREE     1
-#define MODXOM_CMD_LOCK     2
+#define MODXOM_CMD_NOP              0
+#define MODXOM_CMD_FREE             1
+#define MODXOM_CMD_LOCK             2
+#define MODXOM_CMD_LOCK_IN_PLACE    3
 
 #ifdef __cplusplus
 extern "C" {
