@@ -18,7 +18,7 @@ typedef void (*pprint_something)(const char *restrict, printf_type printf_addres
 
 jmp_buf longjmp_buf;
 char code_backup[0x100] = {0, };
-const char msg_format[] = STR_OK "print_something is located at %p, and was called from %p\n\n";
+const char msg_format[] = STR_OK "I am located at %p, and was called from %p\n\n";
 
 void print_something(const char *restrict msg, printf_type printf_address) {
     void** rbp;
@@ -99,7 +99,7 @@ int main(int argc, char* argv[]){
     }
 
     // Call the protected code, and recover from segfault if necessary
-    printf(STR_PEND "Attempting to print something: \n");
+    printf(STR_PEND "Attempting to call print_something in XOM:\n");
     if(!setjmp(longjmp_buf))
         print_protected(msg_format, printf);
     else
