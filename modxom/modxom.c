@@ -132,7 +132,7 @@ static int release_mapping(pxom_mapping mapping) {
     }
 
     for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
-        ClearPageReserved(pfn_to_online_page(mapping->pfn.val + i));
+        ClearPageReserved(virt_to_page(mapping->kaddr + i));
 
     // Don't mess with a dying processes address space
     if (!(current->flags & PF_EXITING)) {
@@ -144,6 +144,7 @@ static int release_mapping(pxom_mapping mapping) {
 
     if(mapping->kaddr)
         free_pages(mapping->kaddr, get_order(mapping->num_pages * PAGE_SIZE));
+    
     if(mapping->lock_status){
         kfree(mapping->lock_status);
         mapping->lock_status = NULL;
