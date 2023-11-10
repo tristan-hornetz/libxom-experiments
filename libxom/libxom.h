@@ -1,3 +1,8 @@
+/** \file libxom.h
+ * A brief file description.
+ * A more elaborated file description.
+ */
+
 #ifndef _LIBXOM_H_
 #define _LIBXOM_H_
 
@@ -7,13 +12,15 @@
 extern "C" {
 #endif
 
-/** An anonymous struct describing a XOM buffer.
+/** 
+ * An anonymous struct describing a XOM buffer.
  * To obtain the executable buffer itself, use xom_lock.
 */
 struct xombuf;
 
 
-/** Allocate a XOM buffer.
+/** 
+ * Allocate a XOM buffer.
  * This buffer will have RWX permissions until xom_lock is called, so make sure
  * that you do not leave the XOM buffer unlocked for longer that necessary.
  *  
@@ -25,14 +32,16 @@ struct xombuf;
 struct xombuf* xom_alloc(size_t size);
 
 
-/** Get the size of a XOM buffer
+/** 
+ * Get the size of a XOM buffer
  * @param buf The XOM buffer
  * @returns The XOM buffer's size
 */
 size_t xom_get_size(struct xombuf* buf);
 
 
-/** Write into a XOM buffer.
+/** 
+ * Write into a XOM buffer.
  * 
  * @param dest The XOM buffer to write into
  * @param src The source buffer
@@ -43,7 +52,8 @@ size_t xom_get_size(struct xombuf* buf);
 */
 int xom_write(struct xombuf* dest, const void *const src, const size_t size);
 
-/** Lock a XOM buffer.
+/** 
+ * Lock a XOM buffer.
  * 
  * @param buf The XOM buffer to lock.
  * @return The address of the newly allocated XOM memory region, or NULL if the function fails 
@@ -56,7 +66,8 @@ void* xom_lock(struct xombuf* buf);
 */
 void xom_free(struct xombuf*);
 
-/** Migrate all executable memory regions that are currently in the address space to XOM.
+/** 
+ * Migrate all executable memory regions that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been
  * called before. Typically, it should be called at the beginning of main.
  * 
@@ -65,7 +76,8 @@ void xom_free(struct xombuf*);
 int xom_migrate_all_code();
 
 
-/** Migrate the code of all shared libraries that are currently in the address space to XOM.
+/** 
+ * Migrate the code of all shared libraries that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been
  * called before. Typically, it should be called at the beginning of main.
  * 

@@ -1,0 +1,7 @@
+*/build
+build
+a.out
+test.c
+libxom/html
+libxom/latex
+.*
