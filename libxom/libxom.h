@@ -14,6 +14,8 @@ size_t xom_get_size(struct xombuf*);
 int xom_write(struct xombuf* dest, const void *const src, const size_t size);
 void* xom_lock(struct xombuf*);
 void xom_free(struct xombuf*);
+int xom_migrate_all_code();
+int xom_migrate_shared_libraries();
 
 #ifdef __cplusplus
 }

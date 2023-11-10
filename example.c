@@ -34,6 +34,8 @@ int main(){
     pfun print_protected;
     struct xombuf* buf;
 
+    xom_migrate_all_code();
+
     if (signal(SIGSEGV, segfault_handler) == SIG_ERR){
         printf("Could not set up signal handler\n");
         return 1;

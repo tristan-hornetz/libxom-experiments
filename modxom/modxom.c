@@ -71,7 +71,6 @@ static int modxom_page_table_walk(unsigned long user_virtual_address, pfn_t* pfn
     pud_t *pud;
     pmd_t *pmd;
     pte_t *pte;
-    unsigned long gfn = 0;
 
     pgd = pgd_offset(mm, user_virtual_address);
     if (pgd_none(*pgd) || pgd_bad(*pgd)) {
@@ -103,8 +102,7 @@ static int modxom_page_table_walk(unsigned long user_virtual_address, pfn_t* pfn
         return -1;
     }
 
-    gfn = pte_pfn(*pte);
-    *pfn = (pfn_t){gfn};
+    *pfn = (pfn_t){pte_pfn(*pte)};
     return 0;
 }
 
