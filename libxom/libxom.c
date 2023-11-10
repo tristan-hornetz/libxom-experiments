@@ -73,22 +73,21 @@ static inline void __libxom_epilogue(){
  *  entry with .type = 0. The caller must free this array
 */
 static text_region* explore_text_regions(){
-    char mpath[64] = {0};
-    pid_t pid = getpid();
-    char * line = NULL;
-    size_t len = 0;
-    FILE* maps;
-    ssize_t res, count = 0;
-    size_t start, end, last = 0;
-    char perms[3];
+    char mpath[64] = {0, };
+    char perms[3] = {0, };
+    char *line;
     int status;
+    size_t start, end, last = 0, len = 0;
+    ssize_t res, count = 0;
+    FILE* maps;
     text_region* regions;
 
-    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) pid);
+    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
     if(!maps)
         return NULL;
     
+    // Get amount of executable memory regions
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
         if(status != 5)
@@ -236,7 +235,7 @@ static int migrate_text_section(text_region* space){
     return status;
 }
 
-static inline int migrate_shared_libraries_internal(){
+static int migrate_shared_libraries_internal(){
     int status = 1;
     unsigned int i = 0;
     text_region* spaces;
@@ -267,7 +266,7 @@ static inline int migrate_shared_libraries_internal(){
 }
 
 
-static inline int migrate_all_code_internal(){
+static int migrate_all_code_internal(){
     int status = 0;
     unsigned int i = 0;
     text_region* spaces;
@@ -292,7 +291,7 @@ static inline int migrate_all_code_internal(){
     return status;
 }
 
-static inline p_xombuf xomalloc_internal(size_t size){
+static p_xombuf xomalloc_internal(size_t size){
     p_xombuf ret;
     
     if(!size){
@@ -316,7 +315,7 @@ static inline p_xombuf xomalloc_internal(size_t size){
     return ret;
 }
 
-static inline int xom_write_internal(struct xombuf* dest, const void *const src, const size_t size){
+static int xom_write_internal(struct xombuf* dest, const void *const src, const size_t size){
     if(!dest || !src || !size){
         errno = EINVAL;
         return -1;
@@ -329,7 +328,7 @@ static inline int xom_write_internal(struct xombuf* dest, const void *const src,
     return (int) size;
 }
 
-static inline void* xom_lock_internal(struct xombuf* buf){
+static void* xom_lock_internal(struct xombuf* buf){
     int status;
     modxom_cmd cmd;
     
@@ -351,7 +350,7 @@ static inline void* xom_lock_internal(struct xombuf* buf){
     return buf->address;
 }
 
-static inline void xom_free_internal(struct xombuf* buf){
+static void xom_free_internal(struct xombuf* buf){
     uint32_t num_pages;
     modxom_cmd cmd;
     
