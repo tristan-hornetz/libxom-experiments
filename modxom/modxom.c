@@ -28,6 +28,7 @@
 #define MAPPING_LINE_SIZE                       ((2 * (2 * sizeof(size_t) + 2)) + 5)
 
 #define MIN(X, Y)                               ((X) < (Y) ? (X) : (Y))
+#define SIZE_CEIL(S)                            ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 #define page_l_arr_index(pmapping, index)       ((pmapping)->lock_status[(index) >> 3])
 #define is_page_locked(pmapping, index)         ((page_l_arr_index(pmapping, index) & (1 << ((index) & 0x7))) ? 1 : 0)
 #define set_lock_status(pmapping, index, val) \
@@ -72,45 +73,86 @@ static int modxom_page_table_walk(unsigned long user_virtual_address, pfn_t* pfn
     pmd_t *pmd;
     pte_t *pte;
 
-    pgd = pgd_offset(mm, user_virtual_address);
-    if (pgd_none(*pgd) || pgd_bad(*pgd)) {
-        printk(KERN_ERR "Invalid PGD entry\n");
+    if (!access_ok((void __user *)user_virtual_address, sizeof(pgd_t)))
         return -1;
-    }
+
+    pgd = pgd_offset(mm, user_virtual_address);
+    if (pgd_none(*pgd) || pgd_bad(*pgd))
+        return -1;
 
     p4d = p4d_offset(pgd, user_virtual_address);
-    if(p4d_none(*p4d) || p4d_bad(*p4d)){
-        printk(KERN_ERR "Invalid P4D entry\n");
+    if(p4d_none(*p4d) || p4d_bad(*p4d))
         return -1;
-    }
 
     pud = pud_offset(p4d, user_virtual_address);
     if (pud_none(*pud) || pud_bad(*pud)) {
-        printk(KERN_ERR "Invalid PUD entry\n");
         return -1;
     }
 
     pmd = pmd_offset(pud, user_virtual_address);
     if (pmd_none(*pmd) || pmd_bad(*pmd)) {
-        printk(KERN_ERR "Invalid PMD entry\n");
         return -1;
     }
 
-    pte = pte_offset_kernel(pmd, user_virtual_address);
+    pte = pte_offset_map(pmd, user_virtual_address);
+    if(!pte)
+        return -1;
     if (!pte_present(*pte)) {
-        printk(KERN_ERR "Invalid PTE entry\n");
+        pte_unmap(pte);
         return -1;
     }
 
     *pfn = (pfn_t){pte_pfn(*pte)};
+    pte_unmap(pte);
     return 0;
+}
+
+static int get_gfns_kernel(pxom_mapping mapping, pfn_t* gfns){
+    unsigned int i;
+
+    for(i = 0; i < mapping->num_pages; i++)
+        gfns[i] = (pfn_t) {virt_to_phys(mapping->kaddr + (i * PAGE_SIZE)) >> PAGE_SHIFT};
+    
+    return 0;
+}
+
+static int get_gfns_user(pxom_mapping mapping, pfn_t* gfns){
+    int status;
+    unsigned int i;
+    struct page** pages;
+    pages = kvmalloc(mapping->num_pages * sizeof(*pages), GFP_KERNEL);
+
+    i = 10;
+    while(i--){
+        status = get_user_pages_fast(mapping->uaddr, mapping->num_pages, 0, pages);
+        if(status < 0)
+            goto exit;
+        if(status == mapping->num_pages)
+            break;
+    }
+    if(!i){
+        status = -EINVAL;
+        goto exit;
+    }
+
+    for(i = 0; i < mapping->num_pages; i++)
+        gfns[i] = (pfn_t) {page_to_phys(pages[i]) >> PAGE_SHIFT};
+
+    status = 0;
+exit:
+    kvfree(pages);
+    return status;
+}
+
+static inline int get_gfns(pxom_mapping mapping, pfn_t* gfns){
+    return mapping->kaddr ? get_gfns_kernel(mapping, gfns) : get_gfns_user(mapping, gfns);
 }
 
 // Add or remove hypervisor protection
 static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
 	int status;
     struct mmuext_op op;
-    pfn_t gfn;
+    pfn_t* gfns;
     unsigned int page_c, i, pages_locked = 0;
 	unsigned long cur_gfn = mapping->pfn.val, base_gfn = cur_gfn, last_gfn;
 
@@ -118,26 +160,26 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         return 0;
     if(page_index + num_pages > mapping->num_pages)
         return -EINVAL;
-
     memset(&op, 0, sizeof(op));
 
-    while(cur_gfn < mapping->pfn.val + num_pages){
+    gfns = kvmalloc(sizeof(*gfns) * mapping->num_pages, GFP_KERNEL);
+    if(!gfns)
+        return -ENOMEM;
+    status = get_gfns(mapping, gfns);
+    if(status < 0)
+        goto exit;
+
+    while(pages_locked < num_pages){
         page_c = 0;
 
         // Group into physically contiguous ranges
         do{
             page_c++;
+            if(page_c + pages_locked >= mapping->num_pages)
+                break;
             last_gfn = cur_gfn;
-            if(mapping->kaddr){
-                cur_gfn = virt_to_phys((void*)(mapping->kaddr + (page_c + pages_locked) * PAGE_SIZE)) >> PAGE_SHIFT;
-                continue;
-            }
-            // If there is no kernel mapping, we have to do the page table walk ourselves
-            status = modxom_page_table_walk(mapping->uaddr + (page_c + pages_locked) * PAGE_SIZE, &gfn);
-            if(status < 0)
-                return -EINVAL;
-            cur_gfn = gfn.val;
-        } while((last_gfn == cur_gfn - 1) && (cur_gfn < mapping->pfn.val + num_pages));
+            cur_gfn = gfns[page_c + pages_locked].val;
+        } while(last_gfn == cur_gfn - 1);
 
         // Perform Hypercall for range
         op.cmd = set_xom ? MMUEXT_MARK_XOM : MMUEXT_UNMARK_XOM;
@@ -147,7 +189,8 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
             printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
-            return status;
+            status = -EINVAL;
+            goto exit;
         }
 
         // Update lock status in mapping struct
@@ -159,7 +202,9 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         // Repeat until all physically contiguous ranges are locked
     }
 
-	return 0;
+exit:
+    kvfree(gfns);
+	return status;
 }
 
 static int release_mapping(pxom_mapping mapping) {
@@ -193,8 +238,7 @@ static int release_mapping(pxom_mapping mapping) {
     return 0;
 }
 
-static pxom_process_entry get_process_entry(void)
-{
+static pxom_process_entry get_process_entry(void) {
     pxom_process_entry curr_entry = (pxom_process_entry)xom_entries.next;
 
     while ((void *)curr_entry != &xom_entries)
@@ -404,8 +448,12 @@ static int lock_in_place(pmodxom_cmd cmd){
 
     // Locking is only allowed for pages that are located in our task's .text section
     if(cmd->base_addr < current->mm->start_code ||
-            (cmd->base_addr + cmd->num_pages * PAGE_SIZE) > current->mm->end_code)
+            (cmd->base_addr + cmd->num_pages * PAGE_SIZE) > SIZE_CEIL(current->mm->end_code)){
+            printk(KERN_INFO "[MODXOM] Could not lock in place. Range is from 0x%lx to 0x%lx, but must be between 0x%lx and 0x%lx\n",
+            cmd->base_addr, (cmd->base_addr + cmd->num_pages * PAGE_SIZE), current->mm->start_code, SIZE_CEIL(current->mm->end_code));
+            
         return -EPERM;
+    }
 
     curr_entry = get_process_entry();
     if(!curr_entry)

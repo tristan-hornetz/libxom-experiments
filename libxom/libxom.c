@@ -36,7 +36,7 @@ struct {
 
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static int xomfd = -1;
+static int32_t xomfd = -1;
 
 #define wrap_call(T, F) {           \
     T r;                            \
@@ -170,7 +170,7 @@ static int remap_no_libc(text_region* space, char* dest){
         "mov %%rax, %0"
         : "=r" (remapping) 
         : "a"(SYS_mmap), "D"(space->text_base), "S"(space->text_end - space->text_base), 
-            "d"(PROT_READ | PROT_WRITE), "c"(MAP_ANONYMOUS | MAP_PRIVATE), "b"(-1ul)
+            "d"(PROT_READ | PROT_WRITE), "c"(MAP_ANONYMOUS | MAP_PRIVATE), "b"(xomfd)
         : "r8", "r9", "r10"
     );
 
@@ -229,8 +229,12 @@ static int migrate_text_section(text_region* space){
 static inline int migrate_shared_libraries_internal(){
     int status = 1;
     unsigned int i = 0;
-    text_region* spaces = explore_text_regions();
+    text_region* spaces;
 
+    if(xomfd < 0)
+        return -1;
+        
+    spaces = explore_text_regions();
     if(!spaces)
         return -1;
 
@@ -256,8 +260,12 @@ static inline int migrate_shared_libraries_internal(){
 static inline int migrate_all_code_internal(){
     int status = 0;
     unsigned int i = 0;
-    text_region* spaces = explore_text_regions();
+    text_region* spaces;
 
+    if(xomfd < 0)
+        return -1;
+
+    spaces = explore_text_regions();
     if(!spaces)
         return -1;
 
