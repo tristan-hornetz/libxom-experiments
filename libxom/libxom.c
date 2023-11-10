@@ -161,19 +161,21 @@ static int remap_no_libc(text_region* space, char* dest){
     
     // Mmap new .text section
     asm volatile(
+        "mov %%ecx, %%ecx\n"
         "mov %%rcx, %%r10\n"
+        "mov %%ebx, %%ebx\n"
         "mov %%rbx, %%r8\n"
         "mov $0, %%r9\n"
         "syscall\n"
         "mov %%rax, %0"
         : "=r" (remapping) 
         : "a"(SYS_mmap), "D"(space->text_base), "S"(space->text_end - space->text_base), 
-            "d"(PROT_READ | PROT_WRITE), "c"(MAP_ANONYMOUS | MAP_PRIVATE), "b"(-1ull)
+            "d"(PROT_READ | PROT_WRITE), "c"(MAP_ANONYMOUS | MAP_PRIVATE), "b"(-1ul)
         : "r8", "r9", "r10"
     );
 
     if(remapping != space->text_base)
-        asm volatile("syscall" :: "a"(SYS_exit), "D"(1)); // exit(1)
+        asm volatile("syscall" :: "a"(SYS_exit), "D"(errno)); // exit(1)
 
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
