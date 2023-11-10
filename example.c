@@ -34,14 +34,12 @@ int main(){
     pfun print_protected;
     struct xombuf* buf;
 
-    xom_migrate_all_code();
-
     if (signal(SIGSEGV, segfault_handler) == SIG_ERR){
         printf("Could not set up signal handler\n");
         return 1;
     }
 
-    buf = xomalloc(1 << 10);
+    buf = xom_alloc(1 << 10);
     if(!buf){
         printf("Could not allocate xom buffer, errno is %d\n", errno);
         return 1;
