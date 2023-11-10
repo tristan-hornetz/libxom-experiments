@@ -48,6 +48,7 @@ static int xomfd = -1;
 static text_region* explore_text_regions();
 
 static void __libxom_prologue(){
+    unsigned i;
     if(initialized){
         while(initialized == 2);
         pthread_mutex_lock(&lib_lock);
@@ -59,7 +60,6 @@ static void __libxom_prologue(){
     pthread_mutex_lock(&lib_lock);
     xomfd = open("/proc/xom", O_RDWR);
     spaces = explore_text_regions();
-    return;
 }
 
 static inline void __libxom_epilogue(){
@@ -133,8 +133,8 @@ static int remap_no_libc(text_region* space, char* dest){
     char *remapping;
 
     /*
-    This function lives in a copy of the code without the GOT, so if we
-    try to call a function from a shared library, bad things will happen.
+    remap_no_libc must work in an environment where the GOT is unavailable,
+    which means that we cannot use any shared libraries whatsoever.
     This unfortunately includes libc, so we have to inline absolutely
     everything, including syscalls and memcpy
     */
@@ -159,9 +159,8 @@ static int remap_no_libc(text_region* space, char* dest){
         : "r8", "r9", "r10"
     );
 
-
-    if(!~(uintptr_t)remapping)
-        asm volatile("syscall" :: "a"(SYS_exit), "D"(1)); // exit(1)
+    if(remapping != space->text_base)
+        asm volatile("syscall" :: "a"(SYS_exit), "D"(errno)); // exit(1)
 
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
@@ -179,7 +178,6 @@ static int migrate_text_section(text_region* space){
     char* dest;
     size_t num_pages = (space->text_end - space->text_base) >> PAGE_SHIFT;
     int (*remap_function)(text_region*, char*);
-    ssize_t offset;
 
     // Mmap code backup
     dest = mmap(NULL, num_pages << PAGE_SHIFT, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -188,15 +186,16 @@ static int migrate_text_section(text_region* space){
         return -1;
     }
     
-    // Copy .text and PLT into new memory
-    offset = dest - space->text_base;
+    // Copy code
     memcpy(dest, space->text_base, num_pages << PAGE_SHIFT);
 
-
     remap_function = remap_no_libc;
+
+    // We cannot unmap the code we are currently executing. If this needs to be done, jump
+    // into the backup and do it from there
     if(space->jump_into_backup){
         mprotect(dest, num_pages << PAGE_SHIFT, PROT_READ | PROT_EXEC);
-        remap_function = (int(*)(text_region*, char*)) ((uintptr_t)remap_function + offset);
+        remap_function = (int(*)(text_region*, char*)) ((uintptr_t)remap_function + (ssize_t)(dest - space->text_base));
     }
 
     status = remap_function(space, dest);
