@@ -24,17 +24,18 @@ struct xombuf {
     uint8_t locked;
 } __attribute__((packed)) typedef _xombuf, *p_xombuf;
 
+
+// Describes an executable memory region
 struct {
-    char* text_base;
-    char* text_end;
-    uint8_t type;
-    uint8_t jump_into_backup;
+    char* text_base;                  // Start of memory region, must be page-aligned
+    char* text_end;                   // End of memory region, must be page-aligned
+    unsigned char type;               // Type of memory region (main executable, shared library or libc)
+    unsigned char jump_into_backup;   // Do we have to jump into backup code when unmapping this region?
 } typedef text_region;
 
 
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static text_region* spaces = NULL;
 static int xomfd = -1;
 
 #define wrap_call(T, F) {           \
@@ -59,13 +60,18 @@ static void __libxom_prologue(){
     initialized = 1;
     pthread_mutex_lock(&lib_lock);
     xomfd = open("/proc/xom", O_RDWR);
-    spaces = explore_text_regions();
 }
 
 static inline void __libxom_epilogue(){
     pthread_mutex_unlock(&lib_lock);
 }
 
+/**
+ * Parse the /proc/<pid>/maps file to find all executable memory segments
+ * 
+ * @returns An array of text_region structs, which is terminated by an
+ *  entry with .type = 0. The caller must free this array
+*/
 static text_region* explore_text_regions(){
     char mpath[64] = {0};
     pid_t pid = getpid();
@@ -126,7 +132,14 @@ static text_region* explore_text_regions(){
     return regions;
 }
 
-
+/**
+ * Unmap the code specified by space, remap it as xom, and fill it with the data in dest
+ * 
+ * @param space A text_region describing the code section that should be remapped
+ * @param dest A backup buffer containing the code in space. It must have the same size
+ * 
+ * @returns 0 upon success, a negative value otherwise
+*/
 static int remap_no_libc(text_region* space, char* dest){
     int status;
     unsigned int i;
@@ -160,7 +173,7 @@ static int remap_no_libc(text_region* space, char* dest){
     );
 
     if(remapping != space->text_base)
-        asm volatile("syscall" :: "a"(SYS_exit), "D"(errno)); // exit(1)
+        asm volatile("syscall" :: "a"(SYS_exit), "D"(1)); // exit(1)
 
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
@@ -172,6 +185,12 @@ static int remap_no_libc(text_region* space, char* dest){
     return 0;
 }
 
+/**
+ * Migrate the code in space to XOM
+ * 
+ * @param space A text_region describing the code that should be migrated
+ * @returns 0 upon success, a negative value otherwise
+*/
 static int migrate_text_section(text_region* space){
     int status;
     unsigned int i;
@@ -208,6 +227,7 @@ static int migrate_text_section(text_region* space){
 static inline int migrate_shared_libraries_internal(){
     int status = 1;
     unsigned int i = 0;
+    text_region* spaces = explore_text_regions();
 
     if(!spaces)
         return -1;
@@ -234,6 +254,7 @@ static inline int migrate_shared_libraries_internal(){
 static inline int migrate_all_code_internal(){
     int status = 0;
     unsigned int i = 0;
+    text_region* spaces = explore_text_regions();
 
     if(!spaces)
         return -1;
@@ -328,11 +349,13 @@ static inline void xom_free_internal(struct xombuf* buf){
     free(buf);
 }
 
-struct xombuf* xomalloc(size_t size){
+struct xombuf* xom_alloc(size_t size){
     wrap_call(struct xombuf*, xomalloc_internal(size));
 }
 
 size_t xom_get_size(struct xombuf* buf){
+    if(!buf)
+        return 0;
     return buf->allocated_size;
 }
 
@@ -351,9 +374,13 @@ void xom_free(struct xombuf* buf){
 }
 
 int xom_migrate_all_code(){
+    if(initialized) 
+        return -1;
     wrap_call(int, migrate_all_code_internal());
 }
 
 int xom_migrate_shared_libraries(){
+    if(initialized) 
+        return -1;
     wrap_call(int, migrate_shared_libraries_internal());
 }
