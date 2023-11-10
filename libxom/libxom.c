@@ -170,7 +170,7 @@ static int remap_no_libc(text_region* space, char* dest){
         "mov %%rax, %0"
         : "=r" (remapping) 
         : "a"(SYS_mmap), "D"(space->text_base), "S"(space->text_end - space->text_base), 
-            "d"(PROT_READ | PROT_WRITE), "c"(MAP_ANONYMOUS | MAP_PRIVATE), "b"(xomfd)
+            "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(xomfd)
         : "r8", "r9", "r10"
     );
 
