@@ -4,17 +4,23 @@
 #include <signal.h>
 #include "libxom.h"
 
-typedef void (*pfun)(const char*, size_t);
+typedef void (*pfun)(const char *restrict, int(*printf_address)(const char *restrict, ...));
 
 jmp_buf longjmp_buf;
-const char msg[] = "Hello from asm\n";
-void __attribute__((aligned(4096))) print_something(const char* pmsg, size_t len){
-    asm volatile(   "mov $1, %%rdi\n"
-                    "mov %1, %%rsi\n"
-                    "mov %2, %%rdx\n"
-                    "syscall"
-                    :: "a"(1), "g"(pmsg), "g"(len)
-                    : "rdi", "rsi", "rdx");
+const char msg_format[] = "print_something is located at %p, and was called from %p\n";
+
+void print_something(const char *restrict msg, int(*printf_address)(const char *restrict, ...)) {
+    void** rbp;
+
+    asm volatile ("mov %%rbp, %0" : "=r"(rbp));
+
+    // We only copy this function into XOM, not the GOT or PLT.
+    // If we want to reloacte this code, we have to give it absolute
+    // pointers to everything it needs to access, including printf
+    // and the format string
+
+    // Print the address of this function, and the address of the caller
+    printf_address(msg, &print_something, rbp[1]);
 }
 
 static void unblock_signal(int signum) {
@@ -34,7 +40,7 @@ int main(){
     pfun print_protected;
     struct xombuf* buf;
 
-    status = xom_migrate_all_code();
+    status = xom_migrate_shared_libraries();
     if(status < 0)
         printf("Could not migrate code! Errno: %d\n", errno);
     else
@@ -51,7 +57,7 @@ int main(){
         return 1;
     }
 
-    status = xom_write(buf, print_something, 48);
+    status = xom_write(buf, print_something, 0x100);
     if(status < 0){
         printf("Could not write to xom buffer, errno is %d\n", errno);
         return 1;
@@ -66,7 +72,7 @@ int main(){
     printf("Attempting to print something: ");
     fflush(stdout);
     if(!setjmp(longjmp_buf))
-        print_protected(msg, sizeof(msg));
+        print_protected(msg_format, printf);
     else
         printf("Error, got segfault!\n");
     

@@ -343,7 +343,6 @@ int xom_mmap(struct file *f, struct vm_area_struct *vma)
         return -ENODEV;
 
     mutex_lock(&file_lock);
-    
 
     curr_entry = get_process_entry();
     new_mapping = get_new_mapping(vma, curr_entry);

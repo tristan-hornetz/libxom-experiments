@@ -86,10 +86,8 @@ static text_region* explore_text_regions(){
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) pid);
     maps = fopen(mpath, "r");
-    if(!maps){
-        printf("Failed to open, errno %d\n", errno);
+    if(!maps)
         return NULL;
-    }
     
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
@@ -122,7 +120,8 @@ static text_region* explore_text_regions(){
         else
             regions[count].type = TEXT_TYPE_SHARED;
         
-        regions[count].jump_into_backup = (start <= (size_t)explore_text_regions && end > (size_t)explore_text_regions) ? 1 : 0;
+        regions[count].jump_into_backup = (start <= (size_t)explore_text_regions && 
+                end > (size_t)explore_text_regions) ? 1 : 0;
         count++;
     }
     fclose(maps);
@@ -137,10 +136,11 @@ static text_region* explore_text_regions(){
  * 
  * @param space A text_region describing the code section that should be remapped
  * @param dest A backup buffer containing the code in space. It must have the same size
+ * @param fd The /proc/xom file descriptor
  * 
  * @returns 0 upon success, a negative value otherwise
 */
-static int remap_no_libc(text_region* space, char* dest){
+static int remap_no_libc(text_region* space, char* dest, int32_t fd){
     int status;
     unsigned int i;
     char *remapping;
@@ -153,12 +153,14 @@ static int remap_no_libc(text_region* space, char* dest){
     */
 
     // Munmap old .text section
-    asm volatile("syscall" : "=a"(status) : "a"(SYS_munmap), "D"(space->text_base), "S"(space->text_end - space->text_base));
+    asm volatile("syscall" : "=a"(status) : "a"(SYS_munmap), 
+        "D"(space->text_base), "S"(space->text_end - space->text_base));
 
     // If there is an error, we can do nothing but quit
     if(status < 0)
         asm volatile("syscall" :: "a"(SYS_exit), "D"(1));  // exit(1)
-    
+
+    //ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
     // Mmap new .text section
     asm volatile(
         "mov %%ecx, %%ecx\n"
@@ -170,19 +172,20 @@ static int remap_no_libc(text_region* space, char* dest){
         "mov %%rax, %0"
         : "=r" (remapping) 
         : "a"(SYS_mmap), "D"(space->text_base), "S"(space->text_end - space->text_base), 
-            "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(xomfd)
+            "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
         : "r8", "r9", "r10"
     );
 
     if(remapping != space->text_base)
-        asm volatile("syscall" :: "a"(SYS_exit), "D"(errno)); // exit(1)
+        asm volatile("syscall" :: "a"(SYS_exit), "D"(remapping)); // exit(1)
 
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
         ((size_t*) space->text_base)[i] = ((size_t*) (dest))[i];
 
     // Make new code executable
-    // asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
+    asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), 
+        "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
 
     return 0;
 }
@@ -198,19 +201,19 @@ static int migrate_text_section(text_region* space){
     unsigned int i;
     char* dest;
     size_t num_pages = (space->text_end - space->text_base) >> PAGE_SHIFT;
-    int (*remap_function)(text_region*, char*);
+    int (*remap_function)(text_region*, char*, int32_t);
     modxom_cmd cmd = {
         .cmd = MODXOM_CMD_LOCK,
         .num_pages = num_pages,
         .base_addr = (unsigned long) space->text_base,
     };
 
+    //printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
+
     // Mmap code backup
     dest = mmap(NULL, num_pages << PAGE_SHIFT, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    if(!~(uintptr_t)dest) {
-        printf("Mmap failed, errno %d\n", errno);
+    if(!~(uintptr_t)dest)
         return -1;
-    }
     
     // Copy code
     memcpy(dest, space->text_base, num_pages << PAGE_SHIFT);
@@ -221,12 +224,12 @@ static int migrate_text_section(text_region* space){
     // into the backup and do it from there
     if(space->jump_into_backup){
         mprotect(dest, num_pages << PAGE_SHIFT, PROT_READ | PROT_EXEC);
-        remap_function = (int(*)(text_region*, char*)) ((uintptr_t)remap_function + (ssize_t)(dest - space->text_base));
+        remap_function = (int(*)(text_region*, char*, int32_t)) ((size_t)remap_function + (ssize_t)(dest - space->text_base));
     }
 
-    status = remap_function(space, dest);
+    status = remap_function(space, dest, xomfd); 
     if(!status)
-        status = write(xomfd, &cmd, sizeof(cmd));
+       status = write(xomfd, &cmd, sizeof(cmd));
 
     // Unmap backup
     munmap(dest, num_pages << PAGE_SHIFT);
