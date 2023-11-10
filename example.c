@@ -36,7 +36,9 @@ int main(){
 
     status = xom_migrate_all_code();
     if(status < 0)
-        printf("Could not migrate code!\n");
+        printf("Could not migrate code! Errno: %d\n", errno);
+    else
+        printf("Sucessfully migrated all code into XOM!\n");
 
     if (signal(SIGSEGV, segfault_handler) == SIG_ERR){
         printf("Could not set up signal handler\n");

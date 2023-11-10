@@ -182,7 +182,7 @@ static int remap_no_libc(text_region* space, char* dest){
         ((size_t*) space->text_base)[i] = ((size_t*) (dest))[i];
 
     // Make new code executable
-    asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
+    // asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
 
     return 0;
 }
@@ -199,6 +199,11 @@ static int migrate_text_section(text_region* space){
     char* dest;
     size_t num_pages = (space->text_end - space->text_base) >> PAGE_SHIFT;
     int (*remap_function)(text_region*, char*);
+    modxom_cmd cmd = {
+        .cmd = MODXOM_CMD_LOCK,
+        .num_pages = num_pages,
+        .base_addr = (unsigned long) space->text_base,
+    };
 
     // Mmap code backup
     dest = mmap(NULL, num_pages << PAGE_SHIFT, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -220,6 +225,8 @@ static int migrate_text_section(text_region* space){
     }
 
     status = remap_function(space, dest);
+    if(!status)
+        status = write(xomfd, &cmd, sizeof(cmd));
 
     // Unmap backup
     munmap(dest, num_pages << PAGE_SHIFT);
@@ -233,7 +240,7 @@ static inline int migrate_shared_libraries_internal(){
 
     if(xomfd < 0)
         return -1;
-        
+
     spaces = explore_text_regions();
     if(!spaces)
         return -1;
