@@ -65,89 +65,6 @@ static bool were_pages_locked(pxom_mapping mapping){
     return ret > 0;
 }
 
-static int modxom_page_table_walk(unsigned long user_virtual_address, pfn_t* pfn){
-    struct mm_struct *mm = current->mm;
-    pgd_t *pgd;
-    p4d_t *p4d;
-    pud_t *pud;
-    pmd_t *pmd;
-    pte_t *pte;
-
-    if (!access_ok((void __user *)user_virtual_address, sizeof(pgd_t)))
-        return -1;
-
-    pgd = pgd_offset(mm, user_virtual_address);
-    if (pgd_none(*pgd) || pgd_bad(*pgd))
-        return -1;
-
-    p4d = p4d_offset(pgd, user_virtual_address);
-    if(p4d_none(*p4d) || p4d_bad(*p4d))
-        return -1;
-
-    pud = pud_offset(p4d, user_virtual_address);
-    if (pud_none(*pud) || pud_bad(*pud)) {
-        return -1;
-    }
-
-    pmd = pmd_offset(pud, user_virtual_address);
-    if (pmd_none(*pmd) || pmd_bad(*pmd)) {
-        return -1;
-    }
-
-    pte = pte_offset_map(pmd, user_virtual_address);
-    if(!pte)
-        return -1;
-    if (!pte_present(*pte)) {
-        pte_unmap(pte);
-        return -1;
-    }
-
-    *pfn = (pfn_t){pte_pfn(*pte)};
-    pte_unmap(pte);
-    return 0;
-}
-
-static int get_gfns_kernel(pxom_mapping mapping, pfn_t* gfns){
-    unsigned int i;
-
-    for(i = 0; i < mapping->num_pages; i++)
-        gfns[i] = (pfn_t) {virt_to_phys(mapping->kaddr + (i * PAGE_SIZE)) >> PAGE_SHIFT};
-    
-    return 0;
-}
-
-static int get_gfns_user(pxom_mapping mapping, pfn_t* gfns){
-    int status;
-    unsigned int i;
-    struct page** pages;
-    pages = kvmalloc(mapping->num_pages * sizeof(*pages), GFP_KERNEL);
-
-    i = 10;
-    while(i--){
-        status = get_user_pages_fast(mapping->uaddr, mapping->num_pages, 0, pages);
-        if(status < 0)
-            goto exit;
-        if(status == mapping->num_pages)
-            break;
-    }
-    if(!i){
-        status = -EINVAL;
-        goto exit;
-    }
-
-    for(i = 0; i < mapping->num_pages; i++)
-        gfns[i] = (pfn_t) {page_to_phys(pages[i]) >> PAGE_SHIFT};
-
-    status = 0;
-exit:
-    kvfree(pages);
-    return status;
-}
-
-static inline int get_gfns(pxom_mapping mapping, pfn_t* gfns){
-    return mapping->kaddr ? get_gfns_kernel(mapping, gfns) : get_gfns_user(mapping, gfns);
-}
-
 // Add or remove hypervisor protection
 static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
 	int status;
@@ -165,9 +82,6 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
     gfns = kvmalloc(sizeof(*gfns) * mapping->num_pages, GFP_KERNEL);
     if(!gfns)
         return -ENOMEM;
-    status = get_gfns(mapping, gfns);
-    if(status < 0)
-        goto exit;
 
     while(pages_locked < num_pages){
         page_c = 0;
@@ -178,7 +92,7 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
             if(page_c + pages_locked >= mapping->num_pages)
                 break;
             last_gfn = cur_gfn;
-            cur_gfn = gfns[page_c + pages_locked].val;
+            cur_gfn = virt_to_phys((void*)(mapping->kaddr + (pages_locked + page_c) * PAGE_SIZE)) >> PAGE_SHIFT;
         } while(last_gfn == cur_gfn - 1);
 
         // Perform Hypercall for range
@@ -327,20 +241,6 @@ static int lock_pages(pmodxom_cmd cmd){
     return -EINVAL;
 }
 
-static bool mapping_exists(pxom_process_entry curr_entry, unsigned long base_address, unsigned int num_pages){
-    pxom_mapping curr_mapping;
-    const unsigned long end_address = base_address + (num_pages << PAGE_SHIFT);
-    unsigned long mapping_end;
-
-    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
-    while ((void *)curr_mapping != &(curr_entry->mappings)){
-        mapping_end = curr_mapping->uaddr + (curr_mapping->num_pages << PAGE_SHIFT);
-        if(end_address > curr_mapping->uaddr && mapping_end > base_address)
-            return true;
-        curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
-    }
-    return false;
-}
 
 static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_entry curr_entry)
 {
@@ -380,7 +280,7 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
 
     memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
 
-    pfn = (pfn_t){page_to_pfn(virt_to_page(newmem))};
+    pfn = (pfn_t){virt_to_phys(newmem) >> PAGE_SHIFT};
     status = remap_pfn_range(vma, vma->vm_start, pfn.val, size, PAGE_SHARED_EXEC);
 
     if (status < 0)
@@ -404,72 +304,6 @@ fail:
     if (newmem)
         __free_pages(virt_to_page(newmem), get_order(size));
     return NULL;
-}
-
-static pxom_mapping mapping_from_task_pages(pmodxom_cmd cmd, pxom_process_entry curr_entry){
-    int status;
-    pxom_mapping mapping = kmalloc(sizeof(*mapping), GFP_KERNEL);
-    pfn_t gfn;
-    uint8_t* n_lock_status;
-
-    if(!mapping)
-        return NULL;
-
-    n_lock_status = kmalloc((cmd->num_pages >> 3) + 1, GFP_KERNEL);
-    if(!n_lock_status)
-        goto fail;
-    
-    memset(n_lock_status, 0, (cmd->num_pages >> 3) + 1);
-
-    status = modxom_page_table_walk(cmd->base_addr, &gfn);
-    if(status < 0)
-        goto fail;
-
-    *mapping = (xom_mapping){
-        .num_pages = cmd->num_pages,
-        .uaddr = cmd->base_addr,
-        .kaddr = 0,
-        .pfn = gfn,
-        .lock_status = n_lock_status
-    };
-
-    return mapping;
-fail:
-    if(mapping)
-        kfree(mapping);
-    if(n_lock_status)
-        kfree(n_lock_status);
-    return NULL;
-}
-
-static int lock_in_place(pmodxom_cmd cmd){
-    pxom_process_entry curr_entry;
-    pxom_mapping new_mapping;
-
-    // Locking is only allowed for pages that are located in our task's .text section
-    if(cmd->base_addr < current->mm->start_code ||
-            (cmd->base_addr + cmd->num_pages * PAGE_SIZE) > SIZE_CEIL(current->mm->end_code)){
-            printk(KERN_INFO "[MODXOM] Could not lock in place. Range is from 0x%lx to 0x%lx, but must be between 0x%lx and 0x%lx\n",
-            cmd->base_addr, (cmd->base_addr + cmd->num_pages * PAGE_SIZE), current->mm->start_code, SIZE_CEIL(current->mm->end_code));
-            
-        return -EPERM;
-    }
-
-    curr_entry = get_process_entry();
-    if(!curr_entry)
-        return -EINVAL;
-
-    // The new mapping must not overlap with any existing mapping
-    if(mapping_exists(curr_entry, cmd->base_addr, cmd->num_pages))
-        return -EINVAL;
-    
-    new_mapping = mapping_from_task_pages(cmd, curr_entry);
-    if(!new_mapping)
-        return -EINVAL;
-    
-    list_add(&(new_mapping->lhead), &(curr_entry->mappings));
-
-    return lock_pages_xen(new_mapping, 0, new_mapping->num_pages, true);
 }
 
 int xom_open(struct inode *, struct file *)
@@ -602,9 +436,6 @@ ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_
             break;
         case MODXOM_CMD_LOCK:
             ret = lock_pages(&cmd);
-            break;
-        case MODXOM_CMD_LOCK_IN_PLACE:
-            ret = lock_in_place(&cmd);
             break;
         default:;
     }
