@@ -8,7 +8,8 @@
 #define MODXOM_CMD_NOP              0
 #define MODXOM_CMD_FREE             1
 #define MODXOM_CMD_LOCK             2
-#define MODXOM_CMD_LOCK_IN_PLACE    3
+#define MODXOM_CMD_INIT_SUBPAGES    3
+#define MODXOM_CMD_WRITE_SUBPAGES   4
 
 #ifdef __cplusplus
 extern "C" {

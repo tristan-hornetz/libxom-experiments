@@ -22,6 +22,11 @@
 
 #define MMUEXT_MARK_XOM                         21
 #define MMUEXT_UNMARK_XOM                       22
+#define MMUEXT_CREATE_XOM_SPAGES                23
+#define MMUEXT_WRITE_XOM_SPAGES                 24
+
+#define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
+#define MAX_SUBPAGES_PER_CMD ((PAGE_SIZE - sizeof(uint8_t)) / (sizeof(xom_subpage_write_info)))
 
 #define MODXOM_PROC_FILE_NAME                   "xom"
 #define READ_HEADER_STRING                      "        Address:             Size:\n"
@@ -42,6 +47,7 @@ struct
     unsigned long kaddr;
     pfn_t pfn;
     uint8_t* lock_status;
+    bool subpage_level;
 } typedef xom_mapping, *pxom_mapping;
 
 struct
@@ -51,6 +57,16 @@ struct
     struct list_head mappings;
     struct list_head locked_in_place;
 } typedef xom_process_entry, *pxom_process_entry;
+
+struct {
+    uint8_t target_subpage;
+    uint8_t data[SUBPAGE_SIZE];
+} typedef xom_subpage_write_info;
+
+struct {
+    uint8_t num_subpages;
+    xom_subpage_write_info write_info [MAX_SUBPAGES_PER_CMD];
+} typedef xom_subpage_write_command;
 
 LIST_HEAD(xom_entries);
 static struct mutex file_lock;
@@ -66,7 +82,7 @@ static bool were_pages_locked(pxom_mapping mapping){
 }
 
 // Add or remove hypervisor protection
-static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, bool set_xom){
+static int xom_invoke_xen(pxom_mapping mapping, unsigned int page_index, unsigned int num_pages, unsigned int mmuext_cmd){
 	int status;
     struct mmuext_op op;
     pfn_t* gfns;
@@ -96,7 +112,7 @@ static int lock_pages_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         } while(last_gfn == cur_gfn - 1);
 
         // Perform Hypercall for range
-        op.cmd = set_xom ? MMUEXT_MARK_XOM : MMUEXT_UNMARK_XOM;
+        op.cmd = mmuext_cmd;
         op.arg1.mfn = base_gfn;
         op.arg2.nr_ents = page_c;
         printk(KERN_INFO "[XOM Seal] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
@@ -126,7 +142,7 @@ static int release_mapping(pxom_mapping mapping) {
     unsigned long i;
 
     if(were_pages_locked(mapping)){
-        status = lock_pages_xen(mapping, 0, mapping->num_pages, false);
+        status = xom_invoke_xen(mapping, 0, mapping->num_pages, MMUEXT_UNMARK_XOM);
         if(status)
             return status;
     }
@@ -232,16 +248,53 @@ static int lock_pages(pmodxom_cmd cmd){
             continue;
         }
 
-        page_index = (cmd->base_addr - curr_mapping->uaddr) / PAGE_SIZE;
+        if(curr_mapping->subpage_level)
+            return -EINVAL;
         
         if(cmd->base_addr + cmd->num_pages * PAGE_SIZE > curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE) 
             return -EINVAL;
         
-        return lock_pages_xen(curr_mapping, page_index, cmd->num_pages, true);
+        page_index = (cmd->base_addr - curr_mapping->uaddr) / PAGE_SIZE;
+        
+        return xom_invoke_xen(curr_mapping, page_index, cmd->num_pages, MMUEXT_MARK_XOM);
     }
     return -EINVAL;
 }
 
+static int xom_init_subpages(pmodxom_cmd cmd){
+    int status;
+    pxom_process_entry curr_entry;
+    pxom_mapping curr_mapping;
+
+    curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
+
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(cmd->base_addr < curr_mapping->uaddr || 
+                cmd->base_addr >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+
+        if(curr_mapping->subpage_level)
+            return -EINVAL;
+        
+        if(cmd->base_addr != curr_mapping->uaddr) 
+            return -EINVAL;
+        
+        if(cmd->num_pages != curr_mapping->num_pages)
+            return -EINVAL;
+        
+        status = xom_invoke_xen(curr_mapping, 0, curr_mapping->num_pages, MMUEXT_CREATE_XOM_SPAGES);
+        if(status >= 0)
+            curr_mapping->subpage_level = true;
+        
+        return status;
+    }
+    return -EINVAL;
+}
 
 static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_entry curr_entry)
 {
@@ -291,6 +344,7 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
         .num_pages = size / PAGE_SIZE,
         .uaddr = vma->vm_start,
         .kaddr = (unsigned long)newmem,
+        .subpage_level = false,
         .pfn = pfn,
         .lock_status = n_lock_status
     };
@@ -436,6 +490,9 @@ ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_
             break;
         case MODXOM_CMD_LOCK:
             ret = lock_pages(&cmd);
+            break;
+        case MODXOM_CMD_INIT_SUBPAGES:
+            ret = xom_init_subpages(&cmd);
             break;
         default:;
     }
