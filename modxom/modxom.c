@@ -386,7 +386,7 @@ static int xom_subpage_write_xen(pmodxom_cmd cmd){
 
 static ssize_t xom_write_into_subpages(struct file *f, const char __user *user_mem, size_t len, loff_t *offset){
     ssize_t ret = -EINVAL;
-    xom_subpage_write* cmd = (xom_subpage_write*) modxom_src_operand_page;
+    xom_subpage_write* cmd = NULL;
 
     if ((uintptr_t)modxom_src_operand_page & (PAGE_SIZE - 1))
         return -EFAULT;
@@ -394,9 +394,11 @@ static ssize_t xom_write_into_subpages(struct file *f, const char __user *user_m
     if(len < sizeof(cmd->mxom_cmd) + sizeof(cmd->xen_cmd.num_subpages))
         return -EINVAL;
 
-    mutex_lock(&file_lock);
+    cmd = kvmalloc(len, GFP_KERNEL);
+    if(!cmd || !~(uintptr_t)cmd)
+        return -ENOMEM;
 
-    if(copy_from_user(modxom_src_operand_page, user_mem, len)){
+    if(copy_from_user(cmd, user_mem, len)){
         ret = -EFAULT;
         goto exit;
     }
@@ -409,11 +411,16 @@ static ssize_t xom_write_into_subpages(struct file *f, const char __user *user_m
 
     if(cmd->xen_cmd.num_subpages > (len - sizeof(cmd->mxom_cmd) - sizeof(cmd->xen_cmd.num_subpages)) / sizeof(*(cmd->xen_cmd.write_info)))
         goto exit;
+    
+    mutex_lock(&file_lock);
 
+    memcpy(modxom_src_operand_page, &cmd->xen_cmd, len - sizeof(cmd->mxom_cmd));
     ret = xom_subpage_write_xen(&cmd->mxom_cmd);
 
-exit:
     mutex_unlock(&file_lock);
+exit:
+    if(cmd)
+        kvfree(cmd);
     return ret;
 }
 
