@@ -434,7 +434,7 @@ void* xom_fill_and_lock_subpages_internal(struct xom_subpages* dest, size_t size
     
     for(base_page = 0; base_page < (dest->num_subpages * SUBPAGE_SIZE) / PAGE_SIZE; base_page++){
         base_subpage = 0;
-        while(base_subpage < (PAGE_SIZE / SUBPAGE_SIZE) - subpages_required){
+        while(base_subpage <= (PAGE_SIZE / SUBPAGE_SIZE) - subpages_required){
             if(!((mask << base_subpage) & dest->lock_status[base_page]))
                 goto subpages_found;
             base_subpage++;

@@ -114,7 +114,6 @@ static void test_xom_buffers(){
     printf(STR_PEND "Attempting to call print_something in XOM buffer:\n");
     try_segv {
         print_protected(msg_format, printf);
-        puts("\n");
     } catch_segv {
         printf(STR_FAIL "Error, got segfault!\n\n");
     }
@@ -153,28 +152,27 @@ static void test_subpage_xom(){
     printf(STR_PEND "Attempting to call print_something in subpage-level XOM buffer:\n", (void*) print_protected);
     try_segv {
         print_protected(msg_format, printf);
-        puts("\n");
     } catch_segv {
         printf(STR_FAIL "Error, got segfault!\n\n");
     }
     
     // Attempt to read from XOM memory. A segfault is expected here
-    printf(STR_PEND "Attempting to read from subpage-level XOM buffer...\n");
+    printf(STR_PEND "Attempting to read from subpage-level XOM buffer...\n\n");
     try_segv {
-        printf(STR_FAIL "Successfully read %p. This is bad.\n", *(void**)print_protected);
+        printf(STR_FAIL "Successfully read %p. This is bad.\n\n", *(void**)print_protected);
     } catch_segv { 
-        printf(STR_OK "Caused a segfault, XOM is working!\n");
+        printf(STR_OK "Caused a segfault, XOM is working!\n\n");
     }
 
     printf(STR_PEND "Attempting to fill other subpages:\n");
-    for(i = 0; i < 16; i++){
-        print_protected = (pprint_something) xom_fill_and_lock_subpages(subpages, 2 * SUBPAGE_SIZE - 1, code_backup);
+    for(i = 0; i < 20; i++){
+        print_protected = (pprint_something) xom_fill_and_lock_subpages(subpages, 2 * SUBPAGE_SIZE + 1, code_backup);
         if(!print_protected){
             printf(STR_FAIL "Could not fill subpages! Errno: %d\n\n", errno);
             goto exit;
         }
         try_segv {
-        print_protected(msg_format, printf);
+            print_protected(msg_format, printf);
         } catch_segv {
             printf(STR_FAIL "Error, got segfault!\n\n");
         }
