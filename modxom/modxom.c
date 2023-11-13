@@ -57,7 +57,7 @@ struct
 
 LIST_HEAD(xom_entries);
 static struct mutex file_lock;
-static __attribute__((aligned(PAGE_SIZE))) uint8_t modxom_src_operand_page[PAGE_SIZE];
+static uint8_t* modxom_src_operand_page;
 
 static bool were_pages_locked(pxom_mapping mapping){
     unsigned int i;
@@ -578,6 +578,7 @@ const static struct proc_ops file_ops = {
 static int __init modxom_init(void) {
     struct proc_dir_entry *entry;
     mutex_init(&file_lock);
+    modxom_src_operand_page = (uint8_t *)__get_free_pages(GFP_KERNEL, get_order(PAGE_SIZE));
     entry = proc_create(MODXOM_PROC_FILE_NAME, 0666, NULL, &file_ops);
     printk(KERN_INFO "[MODXOM] MODXOM Kernel Module loaded!\n");
     return 0;
@@ -594,6 +595,7 @@ static void __exit modxom_exit(void) {
     }
 
     remove_proc_entry(MODXOM_PROC_FILE_NAME, NULL);
+    free_pages((unsigned long) modxom_src_operand_page, get_order(PAGE_SIZE));
     mutex_destroy(&file_lock);
     printk(KERN_INFO "[MODXOM] MODXOM Kernel Module unloaded\n");
 }
