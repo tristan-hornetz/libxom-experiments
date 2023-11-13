@@ -3,6 +3,8 @@
 
 #ifndef __KERNEL__
 #include <stdint.h>
+#define PAGE_SIZE 0x1000
+#define PAGE_SHIFT 12
 #endif
 
 #define MODXOM_CMD_NOP              0
@@ -10,6 +12,9 @@
 #define MODXOM_CMD_LOCK             2
 #define MODXOM_CMD_INIT_SUBPAGES    3
 #define MODXOM_CMD_WRITE_SUBPAGES   4
+
+#define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
+#define MAX_SUBPAGES_PER_CMD ((PAGE_SIZE - sizeof(uint8_t)) / (sizeof(xom_subpage_write_info)))
 
 #ifdef __cplusplus
 extern "C" {
@@ -20,6 +25,21 @@ struct {
     uint32_t num_pages;
     uintptr_t base_addr;
 } typedef modxom_cmd, *pmodxom_cmd;
+
+struct {
+    uint8_t target_subpage;
+    uint8_t data[SUBPAGE_SIZE];
+} typedef xom_subpage_write_info;
+
+struct {
+    uint8_t num_subpages;
+    xom_subpage_write_info write_info [MAX_SUBPAGES_PER_CMD];
+} typedef xom_subpage_write_command;
+
+struct {
+    modxom_cmd mxom_cmd;
+    xom_subpage_write_command xen_cmd;
+} typedef xom_subpage_write;
 
 
 #ifdef __cplusplus

@@ -25,9 +25,6 @@
 #define MMUEXT_CREATE_XOM_SPAGES                23
 #define MMUEXT_WRITE_XOM_SPAGES                 24
 
-#define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
-#define MAX_SUBPAGES_PER_CMD ((PAGE_SIZE - sizeof(uint8_t)) / (sizeof(xom_subpage_write_info)))
-
 #define MODXOM_PROC_FILE_NAME                   "xom"
 #define READ_HEADER_STRING                      "        Address:             Size:\n"
 #define MAPPING_LINE_SIZE                       ((2 * (2 * sizeof(size_t) + 2)) + 5)
@@ -58,18 +55,9 @@ struct
     struct list_head locked_in_place;
 } typedef xom_process_entry, *pxom_process_entry;
 
-struct {
-    uint8_t target_subpage;
-    uint8_t data[SUBPAGE_SIZE];
-} typedef xom_subpage_write_info;
-
-struct {
-    uint8_t num_subpages;
-    xom_subpage_write_info write_info [MAX_SUBPAGES_PER_CMD];
-} typedef xom_subpage_write_command;
-
 LIST_HEAD(xom_entries);
 static struct mutex file_lock;
+static __attribute__((aligned(PAGE_SIZE))) uint8_t modxom_src_operand_page[PAGE_SIZE];
 
 static bool were_pages_locked(pxom_mapping mapping){
     unsigned int i;
@@ -361,7 +349,75 @@ fail:
     return NULL;
 }
 
-int xom_open(struct inode *, struct file *)
+static int xom_subpage_write_xen(pmodxom_cmd cmd){
+    int status;
+    struct mmuext_op op;
+    pxom_process_entry curr_entry;
+    pxom_mapping curr_mapping;
+
+    curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
+
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(cmd->base_addr < curr_mapping->uaddr || 
+                cmd->base_addr >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+
+        if(!curr_mapping->subpage_level)
+            return -EINVAL;
+        
+        op.cmd = MMUEXT_WRITE_XOM_SPAGES;
+        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr)));
+        op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page);
+        printk(KERN_INFO "[XOM Seal] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
+        status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
+        if(status){
+            printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
+            return -EINVAL;
+        }
+        return 0;
+    }
+    return -EINVAL;
+}
+
+static ssize_t xom_write_into_subpages(struct file *f, const char __user *user_mem, size_t len, loff_t *offset){
+    ssize_t ret = -EINVAL;
+    xom_subpage_write* cmd = (xom_subpage_write*) modxom_src_operand_page;
+
+    if ((uintptr_t)modxom_src_operand_page & (PAGE_SIZE - 1))
+        return -EFAULT;
+
+    if(len < sizeof(cmd->mxom_cmd) + sizeof(cmd->xen_cmd.num_subpages))
+        return -EINVAL;
+
+    mutex_lock(&file_lock);
+
+    if(copy_from_user(modxom_src_operand_page, user_mem, len)){
+        ret = -EFAULT;
+        goto exit;
+    }
+    
+    if(cmd->mxom_cmd.cmd != MODXOM_CMD_WRITE_SUBPAGES)
+        goto exit;
+    
+    if(!cmd->xen_cmd.num_subpages)
+        goto exit;
+
+    if(cmd->xen_cmd.num_subpages > (len - sizeof(cmd->mxom_cmd) - sizeof(cmd->xen_cmd.num_subpages)) / sizeof(*(cmd->xen_cmd.write_info)))
+        goto exit;
+
+    ret = xom_subpage_write_xen(&cmd->mxom_cmd);
+
+exit:
+    mutex_unlock(&file_lock);
+    return ret;
+}
+
+static int xom_open(struct inode *, struct file *)
 {
     pxom_process_entry new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
     new_entry->pid = current->pid;
@@ -372,7 +428,7 @@ int xom_open(struct inode *, struct file *)
     return 0;
 }
 
-int xom_release(struct inode *, struct file *)
+static int xom_release(struct inode *, struct file *)
 {
     int status;
     pxom_process_entry curr_entry;
@@ -387,7 +443,7 @@ int xom_release(struct inode *, struct file *)
     return status;
 }
 
-int xom_mmap(struct file *f, struct vm_area_struct *vma)
+static int xom_mmap(struct file *f, struct vm_area_struct *vma)
 {
     int status = 0;
     pxom_process_entry curr_entry;
@@ -410,7 +466,7 @@ int xom_mmap(struct file *f, struct vm_area_struct *vma)
     return status;
 }
 
-ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offset)
+static ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offset)
 {
     ssize_t status = -EINVAL;
     size_t len_reqired = sizeof(READ_HEADER_STRING), index, clen;
@@ -471,12 +527,14 @@ exit:
     return status;
 }
 
-ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_t *offset)
+static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_t *offset)
 {
     ssize_t ret = -EINVAL;
     modxom_cmd cmd;
     if(len < sizeof(modxom_cmd))
         return -EINVAL;
+    if(len > sizeof(modxom_cmd))
+        return xom_write_into_subpages(f, user_mem, len, offset);
     if(copy_from_user(&cmd, user_mem, sizeof(cmd)))
         return -EFAULT;
     
@@ -512,7 +570,6 @@ const static struct proc_ops file_ops = {
 
 static int __init modxom_init(void) {
     struct proc_dir_entry *entry;
-    printk(KERN_INFO "[MODXOM] Hello World!\n");
     mutex_init(&file_lock);
     entry = proc_create(MODXOM_PROC_FILE_NAME, 0666, NULL, &file_ops);
     printk(KERN_INFO "[MODXOM] MODXOM Kernel Module loaded!\n");
@@ -531,7 +588,7 @@ static void __exit modxom_exit(void) {
 
     remove_proc_entry(MODXOM_PROC_FILE_NAME, NULL);
     mutex_destroy(&file_lock);
-    printk(KERN_INFO "[MODXOM] MODXOM Kernel Module unloaded. Goodbye!\n");
+    printk(KERN_INFO "[MODXOM] MODXOM Kernel Module unloaded\n");
 }
 
 module_init(modxom_init);
