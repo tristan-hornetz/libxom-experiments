@@ -2,6 +2,7 @@
 build
 a.out
 test.c
+test2.c
 libxom/html
 libxom/latex
 .*

@@ -371,8 +371,8 @@ static int xom_subpage_write_xen(pmodxom_cmd cmd){
             return -EINVAL;
         
         op.cmd = MMUEXT_WRITE_XOM_SPAGES;
-        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr)));
-        op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page);
+        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr))) >> PAGE_SHIFT;
+        op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page) >> PAGE_SHIFT;
         printk(KERN_INFO "[XOM Seal] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
