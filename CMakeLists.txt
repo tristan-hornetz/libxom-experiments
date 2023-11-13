@@ -14,11 +14,11 @@ add_library(xom SHARED
 )
 target_link_libraries(xom PRIVATE Threads::Threads)
 
-add_executable(xom_example
-    "example.c"
+add_executable(xom_demo
+    "demo.c"
 )
-target_link_libraries(xom_example xom)
-target_compile_options(xom_example PUBLIC "-fPIC;-pthread")
+target_link_libraries(xom_demo xom)
+target_compile_options(xom_demo PUBLIC "-fPIC;-pthread")
 
 
 install(TARGETS xom DESTINATION /usr/lib)
