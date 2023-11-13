@@ -27,6 +27,7 @@ struct xombuf {
 struct xom_subpages{
     void* address;
     size_t num_subpages;
+    int8_t references;
     uint32_t* lock_status;
 } typedef _xom_subpages, *p_xom_subpages;
 
@@ -401,6 +402,7 @@ struct xom_subpages* xom_alloc_subpages_internal(size_t size){
     *ret = (_xom_subpages){
         .address = xombuf->address,
         .lock_status = malloc(sizeof(uint32_t) * (SIZE_CEIL(size) >> PAGE_SHIFT)),
+        .references = 0,
         .num_subpages = (size / SUBPAGE_SIZE) + (size % SUBPAGE_SIZE ? 1 : 0)
     };
 
@@ -472,10 +474,11 @@ subpages_found:
     }
 
     dest->lock_status[base_page] |= mask << base_subpage;
+    dest->references++;
     return dest->address + base_page * PAGE_SIZE + base_subpage * SUBPAGE_SIZE;
 }
 
-void xom_free_subpages_internal(struct xom_subpages* subpages){
+void xom_free_all_subpages_internal(struct xom_subpages* subpages){
     p_xombuf xbuf = malloc(sizeof(*xbuf));
 
     if(xbuf){
@@ -487,6 +490,20 @@ void xom_free_subpages_internal(struct xom_subpages* subpages){
         xom_free_internal(xbuf);
     }
     free(subpages);
+}
+
+static int xom_free_subpages_internal(struct xom_subpages* subpages, void* base_address){
+    if (base_address < subpages->address)
+        return -1;
+    if(base_address >= subpages->address + (subpages->num_subpages * SUBPAGE_SIZE))
+        return -1;
+    
+    subpages->references--;
+    if(subpages->references <= 0){
+        xom_free_all_subpages_internal(subpages);
+        return 1;
+    }
+    return 0;
 }
 
 struct xombuf* xom_alloc_pages(size_t size){
@@ -533,8 +550,12 @@ void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const v
     wrap_call(void*, xom_fill_and_lock_subpages_internal(dest, size, src))
 }
 
-void xom_free_subpages(struct xom_subpages* subpages){
+int xom_free_subpages(struct xom_subpages* subpages, void* base_address){
+    wrap_call(int, xom_free_subpages_internal(subpages, base_address))
+}
+
+void xom_free_all_subpages(struct xom_subpages* subpages){
     __libxom_prologue();
-    xom_free_subpages_internal(subpages);
+    xom_free_all_subpages_internal(subpages);
     __libxom_epilogue();   
 }

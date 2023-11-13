@@ -180,7 +180,7 @@ static void test_subpage_xom(){
 
 
     exit:
-    xom_free_subpages(subpages);
+    xom_free_all_subpages(subpages);
 }
 
 

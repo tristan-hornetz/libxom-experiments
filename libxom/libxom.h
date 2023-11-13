@@ -34,6 +34,10 @@ struct xom_subpages;
  * Allocate a XOM buffer.
  * This buffer will have RWX permissions until xom_lock is called, so make sure
  * that you do not leave the XOM buffer unlocked for longer that necessary.
+ * XOM buffers are created on the order of pages, which means that the smallest
+ * possible XOM buffer takes up at least 4KB of memory, even if a size smaller
+ * than that is specified. If need to repeatedly allocate small chunks of XOM,
+ * xom_alloc_subpages instead.
  *  
  * @param size The size of the XOM buffer
  * @returns NULL upon failure, a pointer != NULL otherwise.
@@ -95,12 +99,53 @@ int xom_migrate_all_code();
 */
 int xom_migrate_shared_libraries();
 
-
+/**
+ * Allocate a section of XOM that is organized as 128-byte subpages, which can be filled 
+ * independently of each other.
+ * 
+ * @param size The size of the subpage XOM buffer
+ * @returns If this function fails, it returns NULL and sets errno. Otherwise, a pointer
+ *  > NULL is returned
+*/
 struct xom_subpages* xom_alloc_subpages(size_t size);
 
+/**
+ * Search for a contiguous sequence of subpages that is large enough to contain the data
+ * in src. If found, the data in src is written into these subpages, which are then locked.
+ * Note that each write will occupy at least one 128-byte subpage, so even a 1-byte write
+ * will reserve 128-bytes in memory. 
+ * 
+ * @param dest A subpage XOM buffer previously allocated with xom_alloc_subpages
+ * @param size The size of the data in src in bytes
+ * @param src A buffer containing the data to be written into XOM
+ * @returns If this function fails, it returns NULL and sets errno. ENOMEM indicates that
+ * no contiguous sequence of subpages was found that is large enough to store the data in 
+ * src. If successful, the function returns a pointer to the start of the memory chunk that
+ * was written to.
+*/
 void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *const src);
 
-void xom_free_subpages(struct xom_subpages* subpages);
+/**
+ * Free a XOM buffer that was obtained through xom_fill_and_lock_subpages. Note
+ * that this may not release the subpages immediately, as they remain locked in 
+ * memory. The subpages are only marked as unused until all subpages in the XOM
+ * buffer have been freed with this function. Only then is the memory actually
+ * released.
+ * 
+ * @param subpages A subpage XOM buffer previously allocated with xom_alloc_subpages
+ * @param base_address A pointer previously obtained through xom_fill_and_lock_subpages
+ * 
+ * @returns -1 if the function fails, 0 if there are still subpages in the buffer that
+ *  are in use, and 1 if the subpage XOM buffer was fully freed and removed from memory.
+*/
+int xom_free_subpages(struct xom_subpages* subpages, void* base_address);
+
+/**
+ * Free all subpages in the subpage XOM buffer.
+ * 
+ * @param subpages A subpage XOM buffer previously allocated with xom_alloc_subpages
+*/
+void xom_free_all_subpages(struct xom_subpages* subpages);
 
 #ifdef __cplusplus
 }
