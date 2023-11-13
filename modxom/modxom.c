@@ -593,7 +593,7 @@ static void __exit modxom_exit(void) {
         curr_entry = (pxom_process_entry)curr_entry->lhead.next;
         kfree(last_entry);
     }
-
+    
     remove_proc_entry(MODXOM_PROC_FILE_NAME, NULL);
     free_pages((unsigned long) modxom_src_operand_page, get_order(PAGE_SIZE));
     mutex_destroy(&file_lock);

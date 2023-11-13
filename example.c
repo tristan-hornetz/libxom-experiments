@@ -79,6 +79,42 @@ static void test_code_migration(){
     }
 }
 
+static void test_subpage_xom(){
+    pprint_something print_protected;
+    struct xom_subpages* subpages;
+    printf(STR_PEND "==== Testing Subpage XOM ====\n");
+
+    subpages = xom_alloc_subpages(4 * PAGE_SIZE);
+    if(!subpages){
+        printf(STR_FAIL "Could not allocate subpages! Errno: %d\n\n", errno);
+        return;
+    }
+
+    print_protected = (pprint_something) xom_fill_and_lock_subpages(subpages, sizeof(code_backup), code_backup);
+    if(!print_protected){
+        printf(STR_FAIL "Could not fill subpages! Errno: %d\n\n", errno);
+        goto exit;
+    }
+
+    printf(STR_PEND "Attempting to call print_something in subpage-level XOM buffer:\n");
+    try_segv {
+        print_protected(msg_format, printf);
+    } catch_segv {
+        printf(STR_FAIL "Error, got segfault!\n\n");
+    }
+    
+    // Attempt to read from XOM memory. A segfault is expected here
+    printf(STR_PEND "Attempting to read from subpage-level XOM buffer...\n");
+    try_segv {
+        printf(STR_FAIL "Successfully read %p. This is bad.\n", *(void**)print_protected);
+    } catch_segv { 
+        printf(STR_OK "Caused a segfault, XOM is working!\n");
+    }
+
+    exit:
+    xom_free_subpages(subpages);
+}
+
 static void test_xom_buffers(){
     int status;
     pprint_something print_protected;
@@ -154,6 +190,9 @@ int main(int argc, char* argv[]){
 
     // Test XOM buffer feature
     test_xom_buffers();
+
+    // Test subpage-level XOM
+    test_subpage_xom();
 
     // Restore segfault handler
     signal(SIGSEGV, old_handler);

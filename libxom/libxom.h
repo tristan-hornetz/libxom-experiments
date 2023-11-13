@@ -8,6 +8,11 @@
 
 #include <stdlib.h>
 
+#ifndef PAGE_SIZE
+#define PAGE_SIZE 0x1000
+#define PAGE_SHIFT 12
+#endif
+
 #ifndef SUBPAGE_SIZE
 #define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
 #endif
