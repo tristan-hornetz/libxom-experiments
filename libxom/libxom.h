@@ -7,6 +7,7 @@
 #define _LIBXOM_H_
 
 #include <stdlib.h>
+#include <stdint.h>
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE 0x1000

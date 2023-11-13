@@ -387,7 +387,7 @@ struct xom_subpages* xom_alloc_subpages_internal(size_t size){
     
     cmd.cmd = MODXOM_CMD_INIT_SUBPAGES;
     cmd.base_addr = (uintptr_t) xombuf->address;
-    cmd.num_pages = SIZE_CEIL(xombuf->allocated_size);
+    cmd.num_pages = SIZE_CEIL(xombuf->allocated_size) >> PAGE_SHIFT;
     status = write(xomfd, &cmd, sizeof(cmd));
     if(status < 0)
         goto exit;
@@ -476,12 +476,17 @@ subpages_found:
 }
 
 void xom_free_subpages_internal(struct xom_subpages* subpages){
-    _xombuf xbuf = {
-        .address = subpages->address,
-        .allocated_size = subpages->num_subpages * SUBPAGE_SIZE,
-        .locked = 1,
-    };
-    xom_free_internal(&xbuf);
+    p_xombuf xbuf = malloc(sizeof(*xbuf));
+
+    if(xbuf){
+        *xbuf = (_xombuf){
+            .address = subpages->address,
+            .allocated_size = subpages->num_subpages * SUBPAGE_SIZE,
+            .locked = 1,
+        };
+        xom_free_internal(xbuf);
+    }
+    free(subpages);
 }
 
 struct xombuf* xom_alloc_pages(size_t size){
@@ -521,7 +526,7 @@ int xom_migrate_shared_libraries(){
 }
 
 struct xom_subpages* xom_alloc_subpages(size_t size){
-    wrap_call(p_xom_subpages, xom_alloc_subpages(size))
+    wrap_call(p_xom_subpages, xom_alloc_subpages_internal(size))
 }
 
 void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *const src){

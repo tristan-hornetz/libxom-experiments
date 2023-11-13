@@ -20,7 +20,7 @@ typedef int (*printf_type) (const char *restrict, ...);
 typedef void (*pprint_something) (const char *restrict, printf_type printf_address);
 
 jmp_buf longjmp_buf;
-const char msg_format[] = STR_OK "I am located at %p, and was called from %p\n\n";
+const char msg_format[] = STR_OK "I am located at %p, and was called from %p\n";
 char code_backup[0x100] = {0, };
 
 
@@ -79,10 +79,64 @@ static void test_code_migration(){
     }
 }
 
+static void test_xom_buffers(){
+    int status;
+    pprint_something print_protected;
+    struct xombuf* buf;
+
+    printf("\n" STR_PEND "==== Testing XOM Buffers ====\n");
+
+    // Allocate XOM buffer
+    buf = xom_alloc_pages(sizeof(code_backup));
+
+    if(!buf){
+        printf(STR_FAIL "Could not allocate XOM buffer, errno is %d\n\n", errno);
+        return;
+    }
+
+    // Write into XOM buffer
+    status = xom_write(buf, code_backup, sizeof(code_backup));
+
+    if(status < 0){
+        printf(STR_FAIL "Could not write to XOM buffer, errno is %d\n\n", errno);
+        return;
+    }
+    
+    // Lock XOM buffer, obtain pointer to XOM memory region
+    print_protected = xom_lock(buf);
+
+    if(!print_protected){
+        printf(STR_FAIL "Could not lock XOM buffer, errno is %d\n\n", errno);
+        return;
+    }
+
+    // Call the protected code, and recover from segfault if necessary
+    printf(STR_PEND "Attempting to call print_something in XOM buffer:\n");
+    try_segv {
+        print_protected(msg_format, printf);
+        puts("\n");
+    } catch_segv {
+        printf(STR_FAIL "Error, got segfault!\n\n");
+    }
+    
+    // Attempt to read from XOM memory. A segfault is expected here
+    printf(STR_PEND "Attempting to read from XOM buffer...\n");
+    try_segv {
+        printf(STR_FAIL "Successfully read %p. This is bad.\n\n", *(void**)print_protected);
+    } catch_segv { 
+        printf(STR_OK "Caused a segfault, XOM is working!\n\n");
+    }
+
+    // Free XOM buffer
+    xom_free(buf);
+}
+
+
 static void test_subpage_xom(){
+    unsigned i;
     pprint_something print_protected;
     struct xom_subpages* subpages;
-    printf(STR_PEND "==== Testing Subpage XOM ====\n");
+    printf("\n" STR_PEND "==== Testing Subpage XOM ====\n");
 
     subpages = xom_alloc_subpages(4 * PAGE_SIZE);
     if(!subpages){
@@ -96,9 +150,10 @@ static void test_subpage_xom(){
         goto exit;
     }
 
-    printf(STR_PEND "Attempting to call print_something in subpage-level XOM buffer:\n");
+    printf(STR_PEND "Attempting to call print_something in subpage-level XOM buffer:\n", (void*) print_protected);
     try_segv {
         print_protected(msg_format, printf);
+        puts("\n");
     } catch_segv {
         printf(STR_FAIL "Error, got segfault!\n\n");
     }
@@ -111,64 +166,25 @@ static void test_subpage_xom(){
         printf(STR_OK "Caused a segfault, XOM is working!\n");
     }
 
+    printf(STR_PEND "Attempting to fill other subpages:\n");
+    for(i = 0; i < 16; i++){
+        print_protected = (pprint_something) xom_fill_and_lock_subpages(subpages, 2 * SUBPAGE_SIZE - 1, code_backup);
+        if(!print_protected){
+            printf(STR_FAIL "Could not fill subpages! Errno: %d\n\n", errno);
+            goto exit;
+        }
+        try_segv {
+        print_protected(msg_format, printf);
+        } catch_segv {
+            printf(STR_FAIL "Error, got segfault!\n\n");
+        }
+    }
+
+
     exit:
     xom_free_subpages(subpages);
 }
 
-static void test_xom_buffers(){
-    int status;
-    pprint_something print_protected;
-    struct xombuf* buf;
-
-    printf("\n" STR_PEND "==== Testing XOM Buffers ====\n");
-
-    // Allocate XOM buffer
-    buf = xom_alloc_pages(sizeof(code_backup));
-
-    if(!buf){
-        printf(STR_FAIL "Could not allocate XOM buffer, errno is %d\n", errno);
-        return;
-    }
-
-    // Write into XOM buffer
-    status = xom_write(buf, code_backup, sizeof(code_backup));
-
-    if(status < 0){
-        printf(STR_FAIL "Could not write to XOM buffer, errno is %d\n", errno);
-        return;
-    }
-
-    // Delete code backup
-    memset(code_backup, 0, sizeof(code_backup));
-    
-    // Lock XOM buffer, obtain pointer to XOM memory region
-    print_protected = xom_lock(buf);
-
-    if(!print_protected){
-        printf(STR_FAIL "Could not lock XOM buffer, errno is %d\n", errno);
-        return;
-    }
-
-    // Call the protected code, and recover from segfault if necessary
-    printf(STR_PEND "Attempting to call print_something in XOM buffer:\n");
-    
-    try_segv {
-        print_protected(msg_format, printf);
-    } catch_segv {
-        printf(STR_FAIL "Error, got segfault!\n\n");
-    }
-    
-    // Attempt to read from XOM memory. A segfault is expected here
-    printf(STR_PEND "Attempting to read from XOM buffer...\n");
-    try_segv {
-        printf(STR_FAIL "Successfully read %p. This is bad.\n", *(void**)print_protected);
-    } catch_segv { 
-        printf(STR_OK "Caused a segfault, XOM is working!\n");
-    }
-
-    // Free XOM buffer
-    xom_free(buf);
-}
 
 int main(int argc, char* argv[]){
     __sighandler_t old_handler;
