@@ -24,6 +24,12 @@ struct xombuf {
     uint8_t locked;
 } __attribute__((packed)) typedef _xombuf, *p_xombuf;
 
+struct xom_subpages{
+    void* address;
+    size_t num_subpages;
+    uint32_t* lock_status;
+} typedef _xom_subpages, *p_xom_subpages;
+
 
 // Describes an executable memory region
 struct {
@@ -291,7 +297,7 @@ static int migrate_all_code_internal(){
     return status;
 }
 
-static p_xombuf xomalloc_internal(size_t size){
+static p_xombuf xomalloc_page_internal(size_t size){
     p_xombuf ret;
     
     if(!size){
@@ -307,8 +313,10 @@ static p_xombuf xomalloc_internal(size_t size){
     }
 
     ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
-    if(!ret->address || !~(uintptr_t)ret->address)
+    if(!ret->address || !~(uintptr_t)ret->address){
+        free(ret);
         return NULL;
+    }
     
     ret->allocated_size = size;
     ret->locked = 0;
@@ -368,8 +376,116 @@ static void xom_free_internal(struct xombuf* buf){
     free(buf);
 }
 
-struct xombuf* xom_alloc(size_t size){
-    wrap_call(struct xombuf*, xomalloc_internal(size));
+struct xom_subpages* xom_alloc_subpages_internal(size_t size){
+    int status;
+    modxom_cmd cmd;
+    p_xom_subpages ret = NULL;
+    p_xombuf xombuf = xomalloc_page_internal(size);
+
+    if(!xombuf)
+        return NULL;
+    
+    cmd.cmd = MODXOM_CMD_INIT_SUBPAGES;
+    cmd.base_addr = (uintptr_t) xombuf->address;
+    cmd.num_pages = SIZE_CEIL(xombuf->allocated_size);
+    status = write(xomfd, &cmd, sizeof(cmd));
+    if(status < 0)
+        goto exit;
+    
+    ret = malloc(sizeof(*ret));
+    if(!ret){
+        errno = ENOMEM;
+        goto exit;
+    }
+
+    *ret = (_xom_subpages){
+        .address = xombuf->address,
+        .lock_status = malloc(sizeof(uint32_t) * (SIZE_CEIL(size) >> PAGE_SHIFT)),
+        .num_subpages = (size / SUBPAGE_SIZE) + (size % SUBPAGE_SIZE ? 1 : 0)
+    };
+
+    if(!ret->lock_status){
+        free(ret);
+        ret = NULL;
+        errno = ENOMEM;
+    } else {
+        memset(ret->lock_status, 0, sizeof(uint32_t) * (SIZE_CEIL(size) >> PAGE_SHIFT));
+    }
+
+exit:
+    free(xombuf);
+    return ret;
+}
+
+void* xom_fill_and_lock_subpages_internal(struct xom_subpages* dest, size_t size, const void *const src){
+    int status;
+    size_t subpages_required = (size / SUBPAGE_SIZE) + (size % SUBPAGE_SIZE ? 1 : 0);
+    uint32_t mask;
+    xom_subpage_write* write_cmd;
+    unsigned int base_page, base_subpage, i;
+
+    if(!size || subpages_required > dest->num_subpages || subpages_required > MAX_SUBPAGES_PER_CMD){
+        errno = EINVAL;
+        return NULL;
+    }
+    
+    
+    mask = (uint32_t) ((1 << subpages_required) - 1);
+    
+    for(base_page = 0; base_page < (dest->num_subpages * SUBPAGE_SIZE) / PAGE_SIZE; base_page++){
+        base_subpage = 0;
+        while((mask << base_subpage) >> base_subpage == mask){
+            if(!((mask << base_subpage) & dest->lock_status[base_page]))
+                goto subpages_found;
+            base_subpage++;
+        } 
+    }
+
+    errno = -ENOMEM;
+    return NULL;
+
+subpages_found:
+    write_cmd = malloc(sizeof(*write_cmd));
+
+    write_cmd->mxom_cmd = (modxom_cmd) {
+        .cmd = MODXOM_CMD_WRITE_SUBPAGES,
+        .num_pages = 1,
+        .base_addr = (uintptr_t) (dest->address + base_page * PAGE_SIZE),
+    };
+
+    write_cmd->xen_cmd.num_subpages = subpages_required;
+
+    for(i = 0; i < subpages_required; i++){
+        write_cmd->xen_cmd.write_info[i].target_subpage = i + base_subpage;
+        memcpy(write_cmd->xen_cmd.write_info[i].data, (char*)src + (i*SUBPAGE_SIZE), SUBPAGE_SIZE);
+    }
+
+    status = write(xomfd, write_cmd, 
+        sizeof(write_cmd->mxom_cmd) + sizeof(write_cmd->xen_cmd.num_subpages) + 
+            subpages_required * sizeof(*write_cmd->xen_cmd.write_info));
+    
+    free(write_cmd);
+    
+    if(status < 0){
+        status = -EINVAL;
+        return NULL;
+    }
+
+    dest->lock_status[base_page] |= mask << base_subpage;
+    return dest->address + base_page * PAGE_SIZE + base_subpage * SUBPAGE_SIZE;
+}
+
+void xom_free_subpages_internal(struct xom_subpages* subpages){
+    _xombuf xbuf = {
+        .address = subpages->address,
+        .allocated_size = subpages->num_subpages * SUBPAGE_SIZE,
+        .locked = 1,
+    };
+    xom_free_internal(&xbuf);
+}
+
+struct xombuf* xom_alloc_pages(size_t size){
+    wrap_call(struct xombuf*, xomalloc_page_internal(size));
 }
 
 size_t xom_get_size(struct xombuf* buf){
@@ -402,4 +518,18 @@ int xom_migrate_shared_libraries(){
     if(initialized) 
         return -1;
     wrap_call(int, migrate_shared_libraries_internal());
+}
+
+struct xom_subpages* xom_alloc_subpages(size_t size){
+    wrap_call(p_xom_subpages, xom_alloc_subpages(size))
+}
+
+void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *const src){
+    wrap_call(void*, xom_fill_and_lock_subpages_internal(dest, size, src))
+}
+
+void xom_free_subpages(struct xom_subpages* subpages){
+    __libxom_prologue();
+    xom_free_subpages_internal(subpages);
+    __libxom_epilogue();   
 }

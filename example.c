@@ -87,7 +87,7 @@ static void test_xom_buffers(){
     printf("\n" STR_PEND "==== Testing XOM Buffers ====\n");
 
     // Allocate XOM buffer
-    buf = xom_alloc(sizeof(code_backup));
+    buf = xom_alloc_pages(sizeof(code_backup));
 
     if(!buf){
         printf(STR_FAIL "Could not allocate XOM buffer, errno is %d\n", errno);

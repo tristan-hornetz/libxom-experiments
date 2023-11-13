@@ -8,6 +8,10 @@
 
 #include <stdlib.h>
 
+#ifndef SUBPAGE_SIZE
+#define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -17,6 +21,7 @@ extern "C" {
  * To obtain the executable buffer itself, use xom_lock.
 */
 struct xombuf;
+struct xom_subpages;
 
 
 /** 
@@ -29,7 +34,7 @@ struct xombuf;
  *  This is not the address of the executable memory region itself, which can be 
  *  obtained with xom_lock.
  */
-struct xombuf* xom_alloc(size_t size);
+struct xombuf* xom_alloc_pages(size_t size);
 
 
 /** 
@@ -75,7 +80,6 @@ void xom_free(struct xombuf*);
 */
 int xom_migrate_all_code();
 
-
 /** 
  * Migrate the code of all shared libraries that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been
@@ -84,6 +88,13 @@ int xom_migrate_all_code();
  * @returns 0 upon success, a negative value otherwise
 */
 int xom_migrate_shared_libraries();
+
+
+struct xom_subpages* xom_alloc_subpages(size_t size);
+
+void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *const src);
+
+void xom_free_subpages(struct xom_subpages* subpages);
 
 #ifdef __cplusplus
 }
