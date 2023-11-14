@@ -23,3 +23,4 @@ target_compile_options(xom_demo PUBLIC "-fPIC;-pthread")
 
 install(TARGETS xom DESTINATION /usr/lib)
 install(FILES libxom/libxom.h DESTINATION include)
+install(FILES ./xom DESTINATION /usr/bin)

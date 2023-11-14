@@ -1,0 +1,6 @@
+#!/bin/sh
+
+export LD_PRELOAD="libxom.so"
+export LIBXOM_LOCK=all
+
+$@

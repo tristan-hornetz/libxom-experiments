@@ -18,6 +18,8 @@
 #define PAGE_SHIFT  12
 #define SIZE_CEIL(S) ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 
+extern char **__environ;
+
 struct xombuf {
     void* address;
     size_t allocated_size;
@@ -55,18 +57,8 @@ static int32_t xomfd = -1;
 
 static text_region* explore_text_regions();
 
-static void __libxom_prologue(){
-    unsigned i;
-    if(initialized){
-        while(initialized == 2);
-        pthread_mutex_lock(&lib_lock);
-        return;
-    }
-    initialized = 2;
-    pthread_mutex_init(&lib_lock, NULL);
-    initialized = 1;
+static inline void __libxom_prologue(){
     pthread_mutex_lock(&lib_lock);
-    xomfd = open("/proc/xom", O_RDWR);
 }
 
 static inline void __libxom_epilogue(){
@@ -82,7 +74,7 @@ static inline void __libxom_epilogue(){
 static text_region* explore_text_regions(){
     char mpath[64] = {0, };
     char perms[3] = {0, };
-    char *line;
+    char *line = NULL;
     int status;
     size_t start, end, last = 0, len = 0;
     ssize_t res, count = 0;
@@ -97,6 +89,8 @@ static text_region* explore_text_regions(){
     // Get amount of executable memory regions
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
+        free(line);
+        line = NULL;
         if(status != 5)
             continue;
         count += perms[2] == 'x' ? 1 : 0;
@@ -111,6 +105,8 @@ static text_region* explore_text_regions(){
     count = 0;
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
+        free(line);
+        line = NULL;
         if(status != 5)
             continue;
         if(perms[2] != 'x')
@@ -531,14 +527,10 @@ void xom_free(struct xombuf* buf){
 }
 
 int xom_migrate_all_code(){
-    if(initialized) 
-        return -1;
     wrap_call(int, migrate_all_code_internal());
 }
 
 int xom_migrate_shared_libraries(){
-    if(initialized) 
-        return -1;
     wrap_call(int, migrate_shared_libraries_internal());
 }
 
@@ -559,3 +551,28 @@ void xom_free_all_subpages(struct xom_subpages* subpages){
     xom_free_all_subpages_internal(subpages);
     __libxom_epilogue();   
 }
+
+__attribute__((constructor))
+static void initialize_libxom() {
+    char path[64];
+    char** envp = __environ;
+    if(initialized)
+        return;
+    pthread_mutex_init(&lib_lock, NULL);
+    initialized = 1;
+    pthread_mutex_lock(&lib_lock);
+    xomfd = open("/proc/xom", O_RDWR);
+    while(*envp) {
+        if(strstr(*envp, "LIBXOM_LOCK=all")){
+            migrate_all_code_internal();
+            break;
+        }
+        else if (strstr(*envp, "LIBXOM_LOCK=libs")){
+            migrate_shared_libraries_internal();
+            break;
+        }
+        envp++;
+    }
+    pthread_mutex_unlock(&lib_lock);
+}
+
