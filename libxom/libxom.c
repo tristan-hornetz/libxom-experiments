@@ -75,7 +75,7 @@ static text_region* explore_text_regions(){
     char mpath[64] = {0, };
     char perms[3] = {0, };
     char *line = NULL;
-    int status;
+    int status, is_libc;
     size_t start, end, last = 0, len = 0;
     ssize_t res, count = 0;
     FILE* maps;
@@ -105,6 +105,7 @@ static text_region* explore_text_regions(){
     count = 0;
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
+        is_libc = strstr(line, "libc.so") ? 1 : 0;
         free(line);
         line = NULL;
         if(status != 5)
@@ -115,9 +116,9 @@ static text_region* explore_text_regions(){
         regions[count].text_base = (char*) start;
         regions[count].text_end = (char*) end;
 
-        if(!count)
+        if (!count)
             regions[count].type = TEXT_TYPE_EXECUTABLE;
-        else if(strstr(line, "libc.so"))
+        else if (is_libc)
             regions[count].type = TEXT_TYPE_LIBC;
         else
             regions[count].type = TEXT_TYPE_SHARED;
