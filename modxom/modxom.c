@@ -25,6 +25,8 @@
 #define MMUEXT_CREATE_XOM_SPAGES                23
 #define MMUEXT_WRITE_XOM_SPAGES                 24
 
+#define MAX_ALLOC_CHUNK_SIZE                    ((1 << (MAX_ORDER - 1)) * PAGE_SIZE)
+
 #define MODXOM_PROC_FILE_NAME                   "xom"
 #define READ_HEADER_STRING                      "        Address:             Size:\n"
 #define MAPPING_LINE_SIZE                       ((2 * (2 * sizeof(size_t) + 2)) + 5)
@@ -289,9 +291,10 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
     unsigned long size = (vma->vm_end - vma->vm_start);
     void *newmem = NULL;
     uint8_t* n_lock_status = NULL;
-    unsigned int i;
+    unsigned int i, c = 0;
     int status;
     pfn_t pfn;
+    ssize_t size_left;
     pxom_mapping new_mapping = NULL;
 
     if (!curr_entry)
@@ -312,21 +315,28 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
 
     memset(n_lock_status, 0, ((size / PAGE_SIZE) >> 3) + 1);
 
-    newmem = (void *)__get_free_pages(GFP_KERNEL, get_order(size));
-    if (!newmem || (ssize_t)newmem == -1)
-        goto fail;
+    size_left = (ssize_t) size;
 
-    // Set PG_reserved bit to prevent swapping
-    for (i = 0; i < size; i += PAGE_SIZE)
-        SetPageReserved(virt_to_page(newmem + i));
+    while(size_left > 0) {
+        newmem = (void *)__get_free_pages(GFP_KERNEL, get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE)));
+        if (!newmem || (ssize_t)newmem == -1)
+            goto fail;
 
-    memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
+        // Set PG_reserved bit to prevent swapping
+        for (i = 0; i < MIN(size_left, MAX_ALLOC_CHUNK_SIZE); i += PAGE_SIZE)
+            SetPageReserved(virt_to_page(newmem + i));
 
-    pfn = (pfn_t){virt_to_phys(newmem) >> PAGE_SHIFT};
-    status = remap_pfn_range(vma, vma->vm_start, pfn.val, size, PAGE_SHARED_EXEC);
+        memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE))));
 
-    if (status < 0)
-        goto fail;
+        pfn = (pfn_t){virt_to_phys(newmem) >> PAGE_SHIFT};
+        status = remap_pfn_range(vma, vma->vm_start + c * MAX_ALLOC_CHUNK_SIZE, pfn.val, MIN(size_left, MAX_ALLOC_CHUNK_SIZE), PAGE_SHARED_EXEC);
+
+        if (status < 0)
+            goto fail;
+        
+        size_left -= MAX_ALLOC_CHUNK_SIZE;
+        c++;
+    }
 
     *new_mapping = (xom_mapping){
         .num_pages = size / PAGE_SIZE,

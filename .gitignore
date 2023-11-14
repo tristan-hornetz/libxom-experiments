@@ -1,8 +1,7 @@
 */build
 build
 a.out
-test.c
-test2.c
+test*.c
 libxom/html
 libxom/latex
 .*
