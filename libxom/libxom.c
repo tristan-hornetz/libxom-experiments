@@ -554,7 +554,6 @@ void xom_free_all_subpages(struct xom_subpages* subpages){
 
 __attribute__((constructor))
 static void initialize_libxom() {
-    char path[64];
     char** envp = __environ;
     if(initialized)
         return;
