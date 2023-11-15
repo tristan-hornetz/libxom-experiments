@@ -16,7 +16,12 @@
 
 #define PAGE_SIZE   0x1000
 #define PAGE_SHIFT  12
-#define SIZE_CEIL(S) ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
+
+#define MAX_ORDER 11
+#define ALLOC_CHUNK_SIZE ((1 << (MAX_ORDER - 1)) << PAGE_SHIFT)
+
+#define SIZE_CEIL(S)    ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
+#define min(x, y)       ((x) < (y) ? (x) : (y))
 
 extern char **__environ;
 
@@ -145,8 +150,9 @@ static text_region* explore_text_regions(){
 */
 static int remap_no_libc(text_region* space, char* dest, int32_t fd){
     int status;
-    unsigned int i;
-    char *remapping;
+    unsigned int i, c;
+    char *remapping = space->text_base;
+    ssize_t size_left = space->text_end - space->text_base;
 
     /*
     remap_no_libc must work in an environment where the GOT is unavailable,
@@ -165,30 +171,36 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
 
     //ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
     // Mmap new .text section
-    asm volatile(
-        "mov %%ecx, %%ecx\n"
-        "mov %%rcx, %%r10\n"
-        "mov %%ebx, %%ebx\n"
-        "mov %%rbx, %%r8\n"
-        "mov $0, %%r9\n"
-        "syscall\n"
-        "mov %%rax, %0"
-        : "=r" (remapping) 
-        : "a"(SYS_mmap), "D"(space->text_base), "S"(space->text_end - space->text_base), 
-            "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
-        : "r8", "r9", "r10"
-    );
+    while(size_left > ALLOC_CHUNK_SIZE){
+        asm volatile(
+            "mov %%ecx, %%ecx\n"
+            "mov %%rcx, %%r10\n"
+            "mov %%ebx, %%ebx\n"
+            "mov %%rbx, %%r8\n"
+            "mov $0, %%r9\n"
+            "syscall\n"
+            "mov %%rax, %0"
+            : "=r" (remapping) 
+            : "a"(SYS_mmap), "D"(remapping), "S"(space->text_end - space->text_base), 
+                "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
+            : "r8", "r9", "r10"
+        );
 
-    if(remapping != space->text_base)
-        asm volatile("syscall" :: "a"(SYS_exit), "D"(remapping)); // exit(1)
+        if(remapping != space->text_base + c * ALLOC_CHUNK_SIZE)
+            asm volatile("syscall" :: "a"(SYS_exit), "D"(remapping)); // exit(1)
+        
+        remapping += ALLOC_CHUNK_SIZE;
+        size_left -= ALLOC_CHUNK_SIZE;
+        c++;
+    }
 
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
         ((size_t*) space->text_base)[i] = ((size_t*) (dest))[i];
 
     // Make new code executable
-    asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), 
-        "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
+    // asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), 
+    //    "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
 
     return 0;
 }
@@ -296,6 +308,8 @@ static int migrate_all_code_internal(){
 }
 
 static p_xombuf xomalloc_page_internal(size_t size){
+    void* current_address = NULL, *last_address = NULL;
+    ssize_t size_left = size;
     p_xombuf ret;
     
     if(!size){
@@ -310,15 +324,31 @@ static p_xombuf xomalloc_page_internal(size_t size){
         return NULL;
     }
 
-    ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
-    if(!ret->address || !~(uintptr_t)ret->address){
-        free(ret);
-        return NULL;
+    ret->address = NULL;
+    while(size_left > 0){
+        current_address = mmap(current_address, SIZE_CEIL(min(ALLOC_CHUNK_SIZE, size_left)), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
+        if(!current_address)
+            goto fail;
+        if(!ret->address)
+            ret->address = current_address;
+        last_address = current_address;
+        current_address += ALLOC_CHUNK_SIZE;
+        size_left -= ALLOC_CHUNK_SIZE;
     }
     
     ret->allocated_size = size;
     ret->locked = 0;
     return ret;
+
+fail:
+    size_left = size;
+    while(ret->address && ret->address <= last_address){
+        munmap(ret->address, SIZE_CEIL(min(ALLOC_CHUNK_SIZE, size_left)));
+        ret->address += ALLOC_CHUNK_SIZE;
+        size_left-= ALLOC_CHUNK_SIZE;
+    }
+    free(ret);
+    return NULL;
 }
 
 static int xom_write_internal(struct xombuf* dest, const void *const src, const size_t size){
@@ -335,42 +365,55 @@ static int xom_write_internal(struct xombuf* dest, const void *const src, const 
 }
 
 static void* xom_lock_internal(struct xombuf* buf){
-    int status;
+    int status, c = 0;
     modxom_cmd cmd;
+    ssize_t size_left;
     
     if(!buf){
         errno = EINVAL;
         return NULL;
     }
+    if(buf->locked)
+        return buf->address;
 
-    cmd = (modxom_cmd) {
-        .cmd = MODXOM_CMD_LOCK,
-        .num_pages = (uint32_t) SIZE_CEIL(buf->allocated_size) >> PAGE_SHIFT,
-        .base_addr = (uintptr_t) buf->address
-    };
+    size_left = buf->allocated_size;
 
-    status = write(xomfd, &cmd, sizeof(cmd));
-    if(status < 0)
-        return NULL;
+    while(size_left > 0){
+        cmd = (modxom_cmd) {
+            .cmd = MODXOM_CMD_LOCK,
+            .num_pages = (uint32_t) SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)) >> PAGE_SHIFT,
+            .base_addr = (uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
+        };
+        status = write(xomfd, &cmd, sizeof(cmd));
+        if(status < 0)
+            return NULL;
+        size_left -=  ALLOC_CHUNK_SIZE;
+        c++;
+    }
     buf->locked = 1;
     return buf->address;
 }
 
 static void xom_free_internal(struct xombuf* buf){
-    uint32_t num_pages;
+    unsigned int c = 0;
     modxom_cmd cmd;
+    ssize_t size_left;
     
     if(!buf)
         return;
     
-    num_pages = (uint32_t) SIZE_CEIL(buf->allocated_size) >> PAGE_SHIFT;
-    cmd = (modxom_cmd) {
-        .cmd = MODXOM_CMD_FREE,
-        .num_pages = num_pages,
-        .base_addr = (uintptr_t) buf->address
-    };
-    write(xomfd, &cmd, sizeof(cmd));
-    munmap(buf->address, num_pages << PAGE_SHIFT);
+    size_left = buf->allocated_size;
+    while(size_left > 0){
+        cmd = (modxom_cmd) {
+            .cmd = MODXOM_CMD_FREE,
+            .num_pages = SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)) >> PAGE_SHIFT,
+            .base_addr = (uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
+        };
+        write(xomfd, &cmd, sizeof(cmd));
+        munmap(buf->address, SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)));
+        size_left -= ALLOC_CHUNK_SIZE;
+        c++;
+    }
     free(buf);
 }
 
@@ -381,6 +424,9 @@ struct xom_subpages* xom_alloc_subpages_internal(size_t size){
     p_xombuf xombuf = xomalloc_page_internal(size);
 
     if(!xombuf)
+        return NULL;
+    
+    if(size > ALLOC_CHUNK_SIZE)
         return NULL;
     
     cmd.cmd = MODXOM_CMD_INIT_SUBPAGES;

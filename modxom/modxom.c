@@ -25,8 +25,6 @@
 #define MMUEXT_CREATE_XOM_SPAGES                23
 #define MMUEXT_WRITE_XOM_SPAGES                 24
 
-#define MAX_ALLOC_CHUNK_SIZE                    ((1 << (MAX_ORDER - 1)) * PAGE_SIZE)
-
 #define MODXOM_PROC_FILE_NAME                   "xom"
 #define READ_HEADER_STRING                      "        Address:             Size:\n"
 #define MAPPING_LINE_SIZE                       ((2 * (2 * sizeof(size_t) + 2)) + 5)
@@ -43,7 +41,7 @@ struct
     struct list_head lhead;
     unsigned int num_pages;
     unsigned long uaddr;
-    unsigned long* kaddrs;
+    unsigned long kaddr;
     pfn_t pfn;
     uint8_t* lock_status;
     bool subpage_level;
@@ -76,8 +74,8 @@ static int xom_invoke_xen(pxom_mapping mapping, unsigned int page_index, unsigne
 	int status;
     struct mmuext_op op;
     pfn_t* gfns;
-    unsigned int page_c, i, pages_locked = 0, current_chunk;
-	unsigned long cur_gfn = mapping->pfn.val, base_gfn = cur_gfn, last_gfn, curr_kaddr;
+    unsigned int page_c, i, pages_locked = 0;
+	unsigned long cur_gfn = mapping->pfn.val, base_gfn = cur_gfn, last_gfn;
 
     if(!num_pages)
         return 0;
@@ -97,10 +95,8 @@ static int xom_invoke_xen(pxom_mapping mapping, unsigned int page_index, unsigne
             page_c++;
             if(page_c + pages_locked >= mapping->num_pages)
                 break;
-            current_chunk = ((page_c + pages_locked) * PAGE_SIZE) / MAX_ALLOC_CHUNK_SIZE;
             last_gfn = cur_gfn;
-            curr_kaddr = mapping->kaddrs[current_chunk] + ((pages_locked + page_c) * PAGE_SIZE) % MAX_ALLOC_CHUNK_SIZE;
-            cur_gfn = virt_to_phys((void*)curr_kaddr) >> PAGE_SHIFT;
+            cur_gfn = virt_to_phys((void*)(mapping->kaddr + (pages_locked + page_c) * PAGE_SIZE)) >> PAGE_SHIFT;
         } while(last_gfn == cur_gfn - 1);
 
         // Perform Hypercall for range
@@ -131,8 +127,7 @@ exit:
 
 static int release_mapping(pxom_mapping mapping) {
     int status = 0;
-    unsigned long i, j;
-    ssize_t size_left;
+    unsigned long i;
 
     if(were_pages_locked(mapping)){
         status = xom_invoke_xen(mapping, 0, mapping->num_pages, MMUEXT_UNMARK_XOM);
@@ -140,26 +135,19 @@ static int release_mapping(pxom_mapping mapping) {
             return status;
     }
 
+    for (i = 0; i < mapping->num_pages * PAGE_SIZE; i += PAGE_SIZE)
+        ClearPageReserved(virt_to_page(mapping->kaddr + i));
+
     // Don't mess with a dying processes address space
     if (!(current->flags & PF_EXITING)) {
         status = vm_munmap(mapping->uaddr, mapping->num_pages * PAGE_SIZE);
-        if(status)
-            return status;
     }
 
-    if(mapping->kaddrs){
-        i = 0;
-        size_left = mapping->num_pages * PAGE_SIZE;
-        while(size_left > 0){
-            for (j = 0; j < MIN(size_left, MAX_ALLOC_CHUNK_SIZE); j += PAGE_SIZE)
-                ClearPageReserved(virt_to_page(mapping->kaddrs[i] + j));
-            free_pages(mapping->kaddrs[i++], get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE)));
-            size_left -= MAX_ALLOC_CHUNK_SIZE;
-        }
+    if(status)
+        return status;
 
-        kfree(mapping->kaddrs);
-        mapping->kaddrs = NULL;
-    }
+    if(mapping->kaddr)
+        free_pages(mapping->kaddr, get_order(mapping->num_pages * PAGE_SIZE));
     
     if(mapping->lock_status){
         kfree(mapping->lock_status);
@@ -300,12 +288,10 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
 {
     unsigned long size = (vma->vm_end - vma->vm_start);
     void *newmem = NULL;
-    unsigned long* kaddrs = NULL;
     uint8_t* n_lock_status = NULL;
-    unsigned int i, c = 0;
+    unsigned int i;
     int status;
     pfn_t pfn;
-    ssize_t size_left;
     pxom_mapping new_mapping = NULL;
 
     if (!curr_entry)
@@ -316,6 +302,9 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
         return NULL;
     }
 
+    if(size > (1 << (MAX_ORDER - 1)) << PAGE_SHIFT)
+        return NULL;
+
     new_mapping = kmalloc(sizeof(*new_mapping), GFP_KERNEL);
     if (!new_mapping)
         return NULL;
@@ -323,42 +312,29 @@ static pxom_mapping get_new_mapping(struct vm_area_struct *vma, pxom_process_ent
     n_lock_status = kmalloc(((size / PAGE_SIZE) >> 3) + 1, GFP_KERNEL);
     if(!n_lock_status)
         goto fail;
-    
-    kaddrs = kmalloc(sizeof(*kaddrs) * ((size / MAX_ALLOC_CHUNK_SIZE) + 1), GFP_KERNEL);
-    if(!kaddrs)
-        goto fail;
 
     memset(n_lock_status, 0, ((size / PAGE_SIZE) >> 3) + 1);
-    memset(kaddrs, 0, sizeof(*kaddrs) * ((size / MAX_ALLOC_CHUNK_SIZE) + 1));
 
-    size_left = (ssize_t) size;
+    newmem = (void *)__get_free_pages(GFP_KERNEL, get_order(size));
+    if (!newmem || (ssize_t)newmem == -1)
+        goto fail;
 
-    while(size_left > 0) {
-        newmem = (void *)__get_free_pages(GFP_KERNEL, get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE)));
-        if (!newmem || (ssize_t)newmem == -1)
-            goto fail;
+    // Set PG_reserved bit to prevent swapping
+    for (i = 0; i < size; i += PAGE_SIZE)
+        SetPageReserved(virt_to_page(newmem + i));
 
-        // Set PG_reserved bit to prevent swapping
-        for (i = 0; i < MIN(size_left, MAX_ALLOC_CHUNK_SIZE); i += PAGE_SIZE)
-            SetPageReserved(virt_to_page(newmem + i));
+    memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(size)));
 
-        memset(newmem, 0x0, PAGE_SIZE * (1 << get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE))));
+    pfn = (pfn_t){virt_to_phys(newmem) >> PAGE_SHIFT};
+    status = remap_pfn_range(vma, vma->vm_start, pfn.val, size, PAGE_SHARED_EXEC);
 
-        pfn = (pfn_t){virt_to_phys(newmem) >> PAGE_SHIFT};
-        status = remap_pfn_range(vma, vma->vm_start + c * MAX_ALLOC_CHUNK_SIZE, pfn.val, MIN(size_left, MAX_ALLOC_CHUNK_SIZE), PAGE_SHARED_EXEC);
-
-        if (status < 0)
-            goto fail;
-        
-        kaddrs[c] = (unsigned long) newmem;
-        size_left -= MAX_ALLOC_CHUNK_SIZE;
-        c++;
-    }
+    if (status < 0)
+        goto fail;
 
     *new_mapping = (xom_mapping){
         .num_pages = size / PAGE_SIZE,
         .uaddr = vma->vm_start,
-        .kaddrs = kaddrs,
+        .kaddr = (unsigned long)newmem,
         .subpage_level = false,
         .pfn = pfn,
         .lock_status = n_lock_status
@@ -371,26 +347,13 @@ fail:
         kfree(curr_entry);
     if(n_lock_status)
         kfree(n_lock_status);
-    if (kaddrs){
-        c = 0;
-        size_left = (ssize_t) size;
-        while(size_left > 0){
-            newmem = (void*) kaddrs[c++];
-            if (!newmem)
-                continue;
-            for (i = 0; i < MIN(size_left, MAX_ALLOC_CHUNK_SIZE); i += PAGE_SIZE)
-                ClearPageReserved(virt_to_page(newmem + i));
-            __free_pages(virt_to_page(newmem), get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE)));
-            size_left -= MAX_ALLOC_CHUNK_SIZE;
-        }
-        kfree(kaddrs);
-    }
+    if (newmem)
+        __free_pages(virt_to_page(newmem), get_order(size));
     return NULL;
 }
 
 static int xom_subpage_write_xen(pmodxom_cmd cmd){
     int status;
-    unsigned long target_chunk, chunk_offset;
     struct mmuext_op op;
     pxom_process_entry curr_entry;
     pxom_mapping curr_mapping;
@@ -409,12 +372,9 @@ static int xom_subpage_write_xen(pmodxom_cmd cmd){
 
         if(!curr_mapping->subpage_level)
             return -EINVAL;
-
-        target_chunk = (cmd->base_addr - curr_mapping->uaddr) / MAX_ALLOC_CHUNK_SIZE;
-        chunk_offset = (cmd->base_addr - curr_mapping->uaddr) % MAX_ALLOC_CHUNK_SIZE;
         
         op.cmd = MMUEXT_WRITE_XOM_SPAGES;
-        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddrs[target_chunk] + chunk_offset)) >> PAGE_SHIFT;
+        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr))) >> PAGE_SHIFT;
         op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page) >> PAGE_SHIFT;
         printk(KERN_INFO "[XOM Seal] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
