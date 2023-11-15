@@ -171,7 +171,7 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
 
     //ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
     // Mmap new .text section
-    while(size_left > ALLOC_CHUNK_SIZE){
+    while(size_left > 0){
         asm volatile(
             "mov %%ecx, %%ecx\n"
             "mov %%rcx, %%r10\n"
@@ -181,7 +181,7 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
             "syscall\n"
             "mov %%rax, %0"
             : "=r" (remapping) 
-            : "a"(SYS_mmap), "D"(remapping), "S"(space->text_end - space->text_base), 
+            : "a"(SYS_mmap), "D"(remapping), "S"(min(size_left, ALLOC_CHUNK_SIZE)), 
                 "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
             : "r8", "r9", "r10"
         );
