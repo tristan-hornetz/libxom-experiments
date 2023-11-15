@@ -143,10 +143,9 @@ static int release_mapping(pxom_mapping mapping) {
     // Don't mess with a dying processes address space
     if (!(current->flags & PF_EXITING)) {
         status = vm_munmap(mapping->uaddr, mapping->num_pages * PAGE_SIZE);
+        if(status)
+            return status;
     }
-
-    if(status)
-        return status;
 
     if(mapping->kaddrs){
         i = 0;
@@ -372,20 +371,19 @@ fail:
         kfree(curr_entry);
     if(n_lock_status)
         kfree(n_lock_status);
-    if(kaddrs)
-        kfree(kaddrs);
-    c = 0;
-    size_left = (ssize_t) size;
-    if (newmem){
+    if (kaddrs){
+        c = 0;
+        size_left = (ssize_t) size;
         while(size_left > 0){
             newmem = (void*) kaddrs[c++];
-            if(!newmem)
+            if (!newmem)
                 continue;
             for (i = 0; i < MIN(size_left, MAX_ALLOC_CHUNK_SIZE); i += PAGE_SIZE)
                 ClearPageReserved(virt_to_page(newmem + i));
             __free_pages(virt_to_page(newmem), get_order(MIN(size_left, MAX_ALLOC_CHUNK_SIZE)));
             size_left -= MAX_ALLOC_CHUNK_SIZE;
         }
+        kfree(kaddrs);
     }
     return NULL;
 }
