@@ -13,6 +13,7 @@ add_library(xom SHARED
     "libxom/libxom.c"
 )
 target_link_libraries(xom PRIVATE Threads::Threads)
+target_compile_options(xom PUBLIC "-pthread;-mrdrnd")
 
 add_executable(xom_demo
     "demo.c"

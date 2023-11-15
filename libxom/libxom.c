@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <immintrin.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include "libxom.h"
@@ -51,6 +52,7 @@ struct {
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
 static int32_t xomfd = -1;
+static void* xom_base_addr = NULL;
 
 #define wrap_call(T, F) {           \
     T r;                            \
@@ -308,7 +310,7 @@ static int migrate_all_code_internal(){
 }
 
 static p_xombuf xomalloc_page_internal(size_t size){
-    void* current_address = NULL, *last_address = NULL;
+    void* current_address = xom_base_addr, *last_address = NULL;
     ssize_t size_left = size;
     p_xombuf ret;
     
@@ -333,6 +335,7 @@ static p_xombuf xomalloc_page_internal(size_t size){
             ret->address = current_address;
         last_address = current_address;
         current_address += ALLOC_CHUNK_SIZE;
+        xom_base_addr = current_address;
         size_left -= ALLOC_CHUNK_SIZE;
     }
     
@@ -377,7 +380,6 @@ static void* xom_lock_internal(struct xombuf* buf){
         return buf->address;
 
     size_left = buf->allocated_size;
-
     while(size_left > 0){
         cmd = (modxom_cmd) {
             .cmd = MODXOM_CMD_LOCK,
@@ -387,7 +389,7 @@ static void* xom_lock_internal(struct xombuf* buf){
         status = write(xomfd, &cmd, sizeof(cmd));
         if(status < 0)
             return NULL;
-        size_left -=  ALLOC_CHUNK_SIZE;
+        size_left -= ALLOC_CHUNK_SIZE;
         c++;
     }
     buf->locked = 1;
@@ -602,6 +604,7 @@ void xom_free_all_subpages(struct xom_subpages* subpages){
 __attribute__((constructor))
 static void initialize_libxom() {
     char** envp = __environ;
+    uintptr_t rval = 0;
     if(initialized)
         return;
     pthread_mutex_init(&lib_lock, NULL);
@@ -619,6 +622,9 @@ static void initialize_libxom() {
         }
         envp++;
     }
+    while(!rval)
+        _rdrand32_step((uint32_t*)&rval);
+    xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
     pthread_mutex_unlock(&lib_lock);
 }
 

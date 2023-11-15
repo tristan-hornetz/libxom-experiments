@@ -103,10 +103,10 @@ static int xom_invoke_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         op.cmd = mmuext_cmd;
         op.arg1.mfn = base_gfn;
         op.arg2.nr_ents = page_c;
-        printk(KERN_INFO "[XOM Seal] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
+        printk(KERN_INFO "[MODXOM] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
-            printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
+            printk(KERN_INFO "[MODXOM] Failed - Status 0x%x\n", status);
             status = -EINVAL;
             goto exit;
         }
@@ -238,7 +238,7 @@ static int lock_pages(pmodxom_cmd cmd){
 
         if(curr_mapping->subpage_level)
             return -EINVAL;
-        
+               
         if(cmd->base_addr + cmd->num_pages * PAGE_SIZE > curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE) 
             return -EINVAL;
         
@@ -376,10 +376,10 @@ static int xom_subpage_write_xen(pmodxom_cmd cmd){
         op.cmd = MMUEXT_WRITE_XOM_SPAGES;
         op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr))) >> PAGE_SHIFT;
         op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page) >> PAGE_SHIFT;
-        printk(KERN_INFO "[XOM Seal] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
+        printk(KERN_INFO "[MODXOM] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
-            printk(KERN_INFO "[XOM Seal] Failed - Status 0x%x\n", status);
+            printk(KERN_INFO "[MODXOM] Failed - Status 0x%x\n", status);
             return -EINVAL;
         }
         return 0;
