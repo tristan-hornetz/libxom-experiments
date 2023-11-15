@@ -599,11 +599,11 @@ static void initialize_libxom() {
     pthread_mutex_lock(&lib_lock);
     xomfd = open("/proc/xom", O_RDWR);
     while(*envp) {
-        if(strstr(*envp, "LIBXOM_LOCK=all")){
+        if(strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)){
             migrate_all_code_internal();
             break;
         }
-        else if (strstr(*envp, "LIBXOM_LOCK=libs")){
+        else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
             migrate_shared_libraries_internal();
             break;
         }
