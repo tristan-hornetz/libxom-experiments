@@ -243,7 +243,7 @@ static int migrate_text_section(text_region* space){
 
     status = remap_function(space, dest, xomfd); 
     size_left = (space->text_end - space->text_base);
-    while(!status && size_left > 0){
+    while(status >= 0 && size_left > 0){
         cmd.cmd = MODXOM_CMD_LOCK;
         cmd.num_pages = min(size_left, ALLOC_CHUNK_SIZE) >> PAGE_SHIFT;
         cmd.base_addr = (uintptr_t) space->text_base + c * ALLOC_CHUNK_SIZE;
