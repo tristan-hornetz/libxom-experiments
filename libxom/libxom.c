@@ -215,15 +215,12 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
 */
 static int migrate_text_section(text_region* space){
     int status;
-    unsigned int i;
+    unsigned int i, c = 0;
     char* dest;
     size_t num_pages = (space->text_end - space->text_base) >> PAGE_SHIFT;
+    ssize_t size_left;
     int (*remap_function)(text_region*, char*, int32_t);
-    modxom_cmd cmd = {
-        .cmd = MODXOM_CMD_LOCK,
-        .num_pages = num_pages,
-        .base_addr = (unsigned long) space->text_base,
-    };
+    modxom_cmd cmd;
 
     //printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
 
@@ -245,8 +242,15 @@ static int migrate_text_section(text_region* space){
     }
 
     status = remap_function(space, dest, xomfd); 
-    if(!status)
-       status = write(xomfd, &cmd, sizeof(cmd));
+    size_left = (space->text_end - space->text_base);
+    while(!status && size_left > 0){
+        cmd.cmd = MODXOM_CMD_LOCK;
+        cmd.num_pages = min(size_left, ALLOC_CHUNK_SIZE) >> PAGE_SHIFT;
+        cmd.base_addr = (uintptr_t) space->text_base + c * ALLOC_CHUNK_SIZE;
+        status = write(xomfd, &cmd, sizeof(cmd));
+        size_left -= ALLOC_CHUNK_SIZE;
+        c++;
+    }
 
     // Unmap backup
     munmap(dest, num_pages << PAGE_SHIFT);
