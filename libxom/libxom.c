@@ -150,7 +150,7 @@ static text_region* explore_text_regions(){
 */
 static int remap_no_libc(text_region* space, char* dest, int32_t fd){
     int status;
-    unsigned int i, c;
+    unsigned int i, c = 0;
     char *remapping = space->text_base;
     ssize_t size_left = space->text_end - space->text_base;
 
