@@ -7,9 +7,6 @@ find_package(Threads REQUIRED)
 
 add_subdirectory("modxom")
 
-set (CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-set (CMAKE_LINKER_FLAGS_DEBUG "${CMAKE_LINKER_FLAGS_DEBUG} -fno-omit-frame-pointer -fsanitize=address")
-
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libxom)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/modxom)
 add_library(xom SHARED 
@@ -23,6 +20,7 @@ add_executable(xom_demo
 )
 target_link_libraries(xom_demo xom)
 target_compile_options(xom_demo PUBLIC "-fPIC;-pthread")
+
 
 install(TARGETS xom DESTINATION /usr/lib)
 install(FILES libxom/libxom.h DESTINATION include)
