@@ -13,13 +13,13 @@ add_library(xom SHARED
     "libxom/libxom.c"
 )
 target_link_libraries(xom PRIVATE Threads::Threads)
-target_compile_options(xom PUBLIC "-pthread;-mrdrnd")
+target_compile_options(xom PUBLIC "-fPIC;-pthread;-mrdrnd")
 
 add_executable(xom_demo
     "demo.c"
 )
 target_link_libraries(xom_demo xom)
-target_compile_options(xom_demo PUBLIC "-fPIC;-pthread")
+target_compile_options(xom_demo PUBLIC "-fPIC;-fno-omit-frame-pointer")
 
 
 install(TARGETS xom DESTINATION /usr/lib)

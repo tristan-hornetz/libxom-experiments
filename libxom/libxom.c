@@ -150,17 +150,19 @@ static text_region* explore_text_regions(){
  * 
  * @returns 0 upon success, a negative value otherwise
 */
-static int remap_no_libc(text_region* space, char* dest, int32_t fd){
+static __attribute__((optimize("O0"))) int remap_no_libc(text_region* space, char* dest, int32_t fd){
     int status;
     unsigned int i, c = 0;
-    char *remapping = space->text_base;
+    char *remapping = space->text_base, *rptr;
     ssize_t size_left = space->text_end - space->text_base;
 
     /*
     remap_no_libc must work in an environment where the GOT is unavailable,
     which means that we cannot use any shared libraries whatsoever.
     This unfortunately includes libc, so we have to inline absolutely
-    everything, including syscalls and memcpy
+    everything, including syscalls and memcpy. Also, we cannot use compiler
+    optimizations for this code, as the compiler may attempt to insert calls
+    to libc for better performance.
     */
 
     // Munmap old .text section
@@ -171,7 +173,6 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
     if(status < 0)
         asm volatile("syscall" :: "a"(SYS_exit), "D"(1));  // exit(1)
 
-    //ret->address = mmap(NULL, SIZE_CEIL(size), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
     // Mmap new .text section
     while(size_left > 0){
         asm volatile(
@@ -182,14 +183,14 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
             "mov $0, %%r9\n"
             "syscall\n"
             "mov %%rax, %0"
-            : "=r" (remapping) 
+            : "=r" (rptr) 
             : "a"(SYS_mmap), "D"(remapping), "S"(min(size_left, ALLOC_CHUNK_SIZE)), 
                 "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
             : "r8", "r9", "r10"
         );
 
-        if(remapping != space->text_base + c * ALLOC_CHUNK_SIZE)
-            asm volatile("syscall" :: "a"(SYS_exit), "D"(remapping)); // exit(1)
+        if(rptr != space->text_base + c * ALLOC_CHUNK_SIZE)
+            asm volatile("syscall" :: "a"(SYS_exit), "D"(-(int8_t)(uintptr_t)rptr)); // exit(errno)
         
         remapping += ALLOC_CHUNK_SIZE;
         size_left -= ALLOC_CHUNK_SIZE;
@@ -199,10 +200,6 @@ static int remap_no_libc(text_region* space, char* dest, int32_t fd){
     // Copy from backup into new .txt
     for(i = 0; i < (space->text_end - space->text_base) / sizeof(size_t); i++)
         ((size_t*) space->text_base)[i] = ((size_t*) (dest))[i];
-
-    // Make new code executable
-    // asm volatile ("syscall" :: "a"(SYS_mprotect), "D"(space->text_base), 
-    //    "S"(space->text_end - space->text_base), "d"(PROT_EXEC | PROT_READ));
 
     return 0;
 }
@@ -222,7 +219,7 @@ static int migrate_text_section(text_region* space){
     int (*remap_function)(text_region*, char*, int32_t);
     modxom_cmd cmd;
 
-    //printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
+    // printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
 
     // Mmap code backup
     dest = mmap(NULL, num_pages << PAGE_SHIFT, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
