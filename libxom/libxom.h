@@ -46,6 +46,10 @@ struct xom_subpages;
  */
 struct xombuf* xom_alloc_pages(size_t size);
 
+/**
+ * @returns 1 if XOM is supported in the current environment, 0 otherwise
+ */
+int is_xom_supported();
 
 /** 
  * Get the size of a XOM buffer

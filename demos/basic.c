@@ -188,7 +188,7 @@ int main(int argc, char* argv[]){
     __sighandler_t old_handler;
 
     // Copy test function code before we migrate the .text
-    // section into XOM. Afterwards, reading the code will no
+    // section into XOM. Afterward, reading the code will no
     // longer be possible
     memcpy(code_backup, print_something, sizeof(code_backup));
 

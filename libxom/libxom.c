@@ -538,6 +538,10 @@ static int xom_free_subpages_internal(struct xom_subpages* subpages, void* base_
     return 0;
 }
 
+static inline int is_xom_supported_internal(){
+    return xomfd >= 0 ? 1 : 0;
+}
+
 struct xombuf* xom_alloc_pages(size_t size){
     wrap_call(struct xombuf*, xomalloc_page_internal(size));
 }
@@ -586,6 +590,10 @@ void xom_free_all_subpages(struct xom_subpages* subpages){
     __libxom_prologue();
     xom_free_all_subpages_internal(subpages);
     __libxom_epilogue();   
+}
+
+int is_xom_supported(){
+    wrap_call(int, is_xom_supported_internal());
 }
 
 __attribute__((constructor))

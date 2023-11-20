@@ -15,6 +15,12 @@ add_library(xom SHARED
 target_link_libraries(xom PRIVATE Threads::Threads)
 target_compile_options(xom PUBLIC "-fPIC;-pthread;-mrdrnd")
 
+add_library(xom-static STATIC
+    "libxom/libxom.c"
+)
+target_link_libraries(xom-static PRIVATE Threads::Threads)
+target_compile_options(xom-static PUBLIC "-pthread;-mrdrnd")
+
 add_subdirectory(demos)
 
 install(TARGETS xom DESTINATION /usr/lib)

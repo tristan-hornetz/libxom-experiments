@@ -4,6 +4,7 @@
 #include <emmintrin.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include "libxom.h"
 #include "libxom-aes-gcm.h"
 
 #define RED "\e[0;31m"
@@ -20,6 +21,7 @@ union {
 } typedef uint128;
 _Static_assert(sizeof(uint128) == sizeof(__m128i), "Size of uint128 does not align!");
 
+static struct xom_subpages* subpages = NULL;
 static char *infile = NULL, *outfile = NULL, *iv_str = NULL, *tag_str = NULL, *key_str = NULL;
 static int enc = 0, dec = 0;
 static uint128 key, iv, tag = {.u64 = {0, 0}};
@@ -204,7 +206,7 @@ static int write_output(ssize_t size, char* restrict output){
     return status;
 }
 
-static key_prime_fun* allocate_key_fun(){
+static key_prime_fun* allocate_key_fun_noxom(){
     key_prime_fun * ret;
 
     ret = (key_prime_fun*) mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -220,6 +222,24 @@ static key_prime_fun* allocate_key_fun(){
 
     return ret;
 
+}
+
+static key_prime_fun* allocate_key_fun(){
+
+    key_prime_fun prime_fun, *ret;
+    if(!is_xom_supported()){
+        fprintf(stderr, STR_WARN "XOM is not supported on this system! Resorting to PKU-based XOM, if available\n");
+        return allocate_key_fun_noxom();
+    }
+
+    memcpy(&prime_fun, empty_key, sizeof(*empty_key));
+    prime_fun.key_lo = key.u64[0];
+    prime_fun.key_hi = key.u64[1];
+    xom_alloc_subpages(getpagesize());
+    ret = (key_prime_fun*) xom_fill_and_lock_subpages(subpages, sizeof(prime_fun), &prime_fun);
+    memset(&prime_fun, 0, sizeof (prime_fun));
+    memset(&key, 0, sizeof(key));
+    return ret;
 }
 
 int main(int argc, char *argv[]) {
@@ -240,6 +260,8 @@ int main(int argc, char *argv[]) {
     output = malloc(block_align(input_size));
     if(!output)
         goto exit;
+    if(block_align(input_size) != input_size)
+        memset(&output[input_size], 0, block_align(input_size) - input_size);
 
     key_fun = allocate_key_fun();
     if(!key_fun){
@@ -251,7 +273,7 @@ int main(int argc, char *argv[]) {
         .key = key_fun,
         .plaintext = (unsigned char *restrict) (enc ? input : output),
         .ciphertext = (unsigned char *restrict) (enc ? output : input),
-        .num_blocks = input_size / GCM_BLOCK_BYTES,
+        .num_blocks = block_align(input_size) / GCM_BLOCK_BYTES,
         .aad = NULL,
         .aad_size = 0,
         .tag = (char *restrict) &tag,
@@ -275,7 +297,7 @@ int main(int argc, char *argv[]) {
     if(dec)
         printf("Auth tag matches! Input is likely genuine.\n");
 
-    status = write_output(input_size, output);
+    status = write_output(block_align(input_size), output);
     if(status < 0){
         fprintf(stderr, STR_ERR "Could not write output!\n");
         goto exit;
@@ -289,6 +311,8 @@ int main(int argc, char *argv[]) {
     status = 0;
 
 exit:
+    if(subpages)
+        xom_free_all_subpages(subpages);
     if(output)
         free(output);
     if(input)
