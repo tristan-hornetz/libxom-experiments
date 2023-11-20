@@ -4,4 +4,5 @@ a.out
 test*.c
 libxom/html
 libxom/latex
+cmake-build-debug
 .*
