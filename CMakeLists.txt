@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.8.0)
-project (libxom)
+project (libxom C ASM)
 set(CMAKE_C_STANDARD 11)
 
 set(THREADS_PREFER_PTHREAD_FLAG ON)
@@ -15,12 +15,7 @@ add_library(xom SHARED
 target_link_libraries(xom PRIVATE Threads::Threads)
 target_compile_options(xom PUBLIC "-fPIC;-pthread;-mrdrnd")
 
-add_executable(xom_demo
-    "demo.c"
-)
-target_link_libraries(xom_demo xom)
-target_compile_options(xom_demo PUBLIC "-fPIC;-fno-omit-frame-pointer")
-
+add_subdirectory(demos)
 
 install(TARGETS xom DESTINATION /usr/lib)
 install(FILES libxom/libxom.h DESTINATION include)
