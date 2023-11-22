@@ -1,0 +1,3 @@
+[submodule "benchmarks/phoronix-test-suite"]
+	path = benchmarks/phoronix-test-suite
+	url = https://github.com/phoronix-test-suite/phoronix-test-suite.git
