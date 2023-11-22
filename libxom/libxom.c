@@ -93,7 +93,7 @@ static text_region* explore_text_regions(){
         return NULL;
     
     // Get amount of executable memory regions
-    while (getline(&line, &len, maps)) {
+    while (getline(&line, &len, maps) > 0) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
         free(line);
         line = NULL;
@@ -109,7 +109,7 @@ static text_region* explore_text_regions(){
         return NULL;
 
     count = 0;
-    while (getline(&line, &len, maps)) {
+    while (getline(&line, &len, maps) > 0) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
         is_libc = strstr(line, "libc.so") ? 1 : 0;
         free(line);
