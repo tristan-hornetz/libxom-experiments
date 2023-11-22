@@ -432,7 +432,7 @@ static int xom_open(struct inode *, struct file *)
     pxom_process_entry new_entry;
 
     mutex_lock(&file_lock);
-    if(get_process_entry(current->pid)){
+    if(get_process_entry()){
         mutex_unlock(&file_lock);
         return -EINVAL;
     }
