@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
+#include <signal.h>
 #include <immintrin.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -614,6 +615,38 @@ void log_process_start(){
     fclose(fp);
 }
 
+static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
+    char mpath[64] = {0, };
+    char perms[3] = {0, };
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t res, count = 0;
+    FILE* maps;
+
+    printf("Segfault at %p!", (void*) siginfo->si_addr);
+
+    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
+    maps = fopen(mpath, "r");
+    if(!maps)
+        return;
+    
+    // Get amount of executable memory regions
+    while ((res = getline(&line, &len, maps)) != -1) {
+        printf("%s", line);
+        free(line);
+        line = NULL;
+    }
+    fclose(maps);
+}
+
+static void setup_debug_fault_handler(){
+    struct sigaction sa;
+    sa.sa_handler = (void*) debug_fault_handler;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+    sigaction(SIGINT, &sa, NULL);
+}
+
 __attribute__((constructor))
 static void initialize_libxom() {
     FILE* fp;
@@ -632,6 +665,7 @@ static void initialize_libxom() {
         }
         else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
             migrate_shared_libraries_internal();
+            setup_debug_fault_handler();
             break;
         }
         envp++;
