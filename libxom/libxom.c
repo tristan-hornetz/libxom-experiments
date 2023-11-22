@@ -659,28 +659,6 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
     exit(0);
 }
 
-static void pmaps() {
-    char mpath[64] = {0, };
-    char perms[3] = {0, };
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t res, count = 0;
-    FILE* maps;
-
-    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
-    maps = fopen(mpath, "r");
-    if(!maps)
-        return;
-    
-    // Get amount of executable memory regions
-    while ((res = getline(&line, &len, maps)) != -1) {
-        printf("%s", line);
-        free(line);
-        line = NULL;
-    }
-    fclose(maps);
-}
-
 
 static void setup_debug_fault_handler(){
     struct sigaction sa;
@@ -727,7 +705,6 @@ static void initialize_libxom() {
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
-    pmaps();
     pthread_mutex_unlock(&lib_lock);
 }
 
