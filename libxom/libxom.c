@@ -639,7 +639,7 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
     char perms[3] = {0, };
     char *line = NULL;
     size_t len = 0;
-    ssize_t res, count = 0;
+    ssize_t count = 0;
     FILE* maps;
 
     printf("Segfault at %p!\n", (void*) siginfo->si_addr);
@@ -650,7 +650,7 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
         return;
     
     // Get amount of executable memory regions
-    while ((res = getline(&line, &len, maps)) != -1) {
+    while (getline(&line, &len, maps) != -1) {
         printf("%s", line);
         free(line);
         line = NULL;
