@@ -69,7 +69,6 @@ AES_128_Key_ExpansionEnc:
     movdqa %xmm1, %xmm14
     ret
 
-
 AES_128_Key_ExpansionDec:
     // expect user key in xmm1
     aeskeygenassist $1, %xmm1, %xmm2
