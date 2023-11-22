@@ -641,10 +641,9 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
 
 static void setup_debug_fault_handler(){
     struct sigaction sa;
-    sa.sa_handler = (void*) debug_fault_handler;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = SA_RESTART | SA_SIGINFO;
-    sigaction(SIGINT, &sa, NULL);
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = debug_fault_handler;
+    sigaction(SIGSEGV, &sa, NULL);
 }
 
 __attribute__((constructor))
