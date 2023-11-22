@@ -1,0 +1,108 @@
+55cf8d436000-55cf8d520000 r--p 00000000 ca:02 192563                     /usr/bin/php8.2
+55cf8d520000-55cf8d820000 rw-p 78c00000 00:15 4026532291                 /proc/xom
+55cf8d820000-55cf8d906000 r--p 003ea000 ca:02 192563                     /usr/bin/php8.2
+55cf8d906000-55cf8d99a000 r--p 004cf000 ca:02 192563                     /usr/bin/php8.2
+55cf8d99a000-55cf8d99c000 rw-p 00563000 ca:02 192563                     /usr/bin/php8.2
+55cf8d99c000-55cf8d9ba000 rw-p 00000000 00:00 0 
+55cf8f1b8000-55cf8f1d9000 rw-p 00000000 00:00 0                          [heap]
+7f4d43200000-7f4d43299000 r--p 00000000 ca:02 132196                     /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30
+7f4d43299000-7f4d4339a000 rw-p 59200000 00:15 4026532291                 /proc/xom
+7f4d4339a000-7f4d43409000 r--p 0019a000 ca:02 132196                     /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30
+7f4d43409000-7f4d43414000 r--p 00209000 ca:02 132196                     /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30
+7f4d43414000-7f4d43417000 rw-p 00214000 ca:02 132196                     /usr/lib/x86_64-linux-gnu/libstdc++.so.6.0.30
+7f4d43417000-7f4d4341a000 rw-p 00000000 00:00 0 
+7f4d43600000-7f4d43601000 r--p 00000000 ca:02 155249                     /usr/lib/x86_64-linux-gnu/libicudata.so.72.1
+7f4d43601000-7f4d43602000 rw-p 35772000 00:15 4026532291                 /proc/xom
+7f4d43602000-7f4d453d0000 r--p 00002000 ca:02 155249                     /usr/lib/x86_64-linux-gnu/libicudata.so.72.1
+7f4d453d0000-7f4d453d1000 r--p 01dcf000 ca:02 155249                     /usr/lib/x86_64-linux-gnu/libicudata.so.72.1
+7f4d453d1000-7f4d453d2000 rw-p 01dd0000 ca:02 155249                     /usr/lib/x86_64-linux-gnu/libicudata.so.72.1
+7f4d454af000-7f4d454b5000 rw-p 00000000 00:00 0 
+7f4d454b5000-7f4d454b8000 r--p 00000000 ca:02 129809                     /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+7f4d454b8000-7f4d454cf000 rw-p 0e680000 00:15 4026532291                 /proc/xom
+7f4d454cf000-7f4d454d3000 r--p 0001a000 ca:02 129809                     /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+7f4d454d3000-7f4d454d4000 r--p 0001d000 ca:02 129809                     /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+7f4d454d4000-7f4d454d5000 rw-p 0001e000 ca:02 129809                     /usr/lib/x86_64-linux-gnu/libgcc_s.so.1
+7f4d454d5000-7f4d454d9000 r--p 00000000 ca:02 130249                     /usr/lib/x86_64-linux-gnu/liblzma.so.5.4.1
+7f4d454d9000-7f4d454f6000 rw-p 02d60000 00:15 4026532291                 /proc/xom
+7f4d454f6000-7f4d45502000 r--p 00021000 ca:02 130249                     /usr/lib/x86_64-linux-gnu/liblzma.so.5.4.1
+7f4d45502000-7f4d45503000 r--p 0002d000 ca:02 130249                     /usr/lib/x86_64-linux-gnu/liblzma.so.5.4.1
+7f4d45503000-7f4d45504000 rw-p 0002e000 ca:02 130249                     /usr/lib/x86_64-linux-gnu/liblzma.so.5.4.1
+7f4d45504000-7f4d4556d000 r--p 00000000 ca:02 155254                     /usr/lib/x86_64-linux-gnu/libicuuc.so.72.1
+7f4d4556d000-7f4d4565e000 rw-p 2d800000 00:15 4026532291                 /proc/xom
+7f4d4565e000-7f4d456ec000 r--p 0015a000 ca:02 155254                     /usr/lib/x86_64-linux-gnu/libicuuc.so.72.1
+7f4d456ec000-7f4d456ff000 r--p 001e8000 ca:02 155254                     /usr/lib/x86_64-linux-gnu/libicuuc.so.72.1
+7f4d456ff000-7f4d45700000 rw-p 001fb000 ca:02 155254                     /usr/lib/x86_64-linux-gnu/libicuuc.so.72.1
+7f4d45700000-7f4d45702000 rw-p 00000000 00:00 0 
+7f4d45702000-7f4d45728000 r--p 00000000 ca:02 170948                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f4d45728000-7f4d4587d000 rw-p 42000000 00:15 4026532291                 /proc/xom
+7f4d4587d000-7f4d458d0000 r--p 0017b000 ca:02 170948                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f4d458d0000-7f4d458d4000 r--p 001ce000 ca:02 170948                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f4d458d4000-7f4d458d6000 rw-p 001d2000 ca:02 170948                     /usr/lib/x86_64-linux-gnu/libc.so.6
+7f4d458d6000-7f4d458e3000 rw-p 00000000 00:00 0 
+7f4d458e3000-7f4d458e4000 r--p 00000000 ca:02 134567                     /usr/lib/x86_64-linux-gnu/libargon2.so.1
+7f4d458e4000-7f4d458e9000 rw-p 0a788000 00:15 4026532291                 /proc/xom
+7f4d458e9000-7f4d458eb000 r--p 00006000 ca:02 134567                     /usr/lib/x86_64-linux-gnu/libargon2.so.1
+7f4d458eb000-7f4d458ec000 r--p 00007000 ca:02 134567                     /usr/lib/x86_64-linux-gnu/libargon2.so.1
+7f4d458ec000-7f4d458ed000 rw-p 00008000 ca:02 134567                     /usr/lib/x86_64-linux-gnu/libargon2.so.1
+7f4d458ed000-7f4d458f9000 r--p 00000000 ca:02 131120                     /usr/lib/x86_64-linux-gnu/libsodium.so.23.3.0
+7f4d458f9000-7f4d45932000 rw-p 0e640000 00:15 4026532291                 /proc/xom
+7f4d45932000-7f4d45944000 r--p 00045000 ca:02 131120                     /usr/lib/x86_64-linux-gnu/libsodium.so.23.3.0
+7f4d45944000-7f4d45945000 ---p 00057000 ca:02 131120                     /usr/lib/x86_64-linux-gnu/libsodium.so.23.3.0
+7f4d45945000-7f4d45946000 r--p 00057000 ca:02 131120                     /usr/lib/x86_64-linux-gnu/libsodium.so.23.3.0
+7f4d45946000-7f4d45947000 rw-p 00058000 ca:02 131120                     /usr/lib/x86_64-linux-gnu/libsodium.so.23.3.0
+7f4d45947000-7f4d4594a000 r--p 00000000 ca:02 132191                     /usr/lib/x86_64-linux-gnu/libz.so.1.2.13
+7f4d4594a000-7f4d4595d000 rw-p 0e600000 00:15 4026532291                 /proc/xom
+7f4d4595d000-7f4d45964000 r--p 00016000 ca:02 132191                     /usr/lib/x86_64-linux-gnu/libz.so.1.2.13
+7f4d45964000-7f4d45965000 r--p 0001c000 ca:02 132191                     /usr/lib/x86_64-linux-gnu/libz.so.1.2.13
+7f4d45965000-7f4d45966000 rw-p 0001d000 ca:02 132191                     /usr/lib/x86_64-linux-gnu/libz.so.1.2.13
+7f4d45966000-7f4d45968000 r--p 00000000 ca:02 130494                     /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2
+7f4d45968000-7f4d459d3000 rw-p 2d900000 00:15 4026532291                 /proc/xom
+7f4d459d3000-7f4d459fe000 r--p 0006d000 ca:02 130494                     /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2
+7f4d459fe000-7f4d459ff000 r--p 00098000 ca:02 130494                     /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2
+7f4d459ff000-7f4d45a00000 rw-p 00099000 ca:02 130494                     /usr/lib/x86_64-linux-gnu/libpcre2-8.so.0.11.2
+7f4d45a00000-7f4d45ac5000 r--p 00000000 ca:02 132747                     /usr/lib/x86_64-linux-gnu/libcrypto.so.3
+7f4d45ac5000-7f4d45d3e000 rw-p 1ec00000 00:15 4026532291                 /proc/xom
+7f4d45d3e000-7f4d45e1b000 r--p 0033e000 ca:02 132747                     /usr/lib/x86_64-linux-gnu/libcrypto.so.3
+7f4d45e1b000-7f4d45e7c000 r--p 0041b000 ca:02 132747                     /usr/lib/x86_64-linux-gnu/libcrypto.so.3
+7f4d45e7c000-7f4d45e7f000 rw-p 0047c000 ca:02 132747                     /usr/lib/x86_64-linux-gnu/libcrypto.so.3
+7f4d45e7f000-7f4d45e82000 rw-p 00000000 00:00 0 
+7f4d45e83000-7f4d45e84000 r--p 00000000 ca:02 170960                     /usr/lib/x86_64-linux-gnu/libpthread.so.0
+7f4d45e84000-7f4d45e85000 rw-p 35736000 00:15 4026532291                 /proc/xom
+7f4d45e85000-7f4d45e86000 r--p 00002000 ca:02 170960                     /usr/lib/x86_64-linux-gnu/libpthread.so.0
+7f4d45e86000-7f4d45e87000 r--p 00002000 ca:02 170960                     /usr/lib/x86_64-linux-gnu/libpthread.so.0
+7f4d45e87000-7f4d45e88000 rw-p 00003000 ca:02 170960                     /usr/lib/x86_64-linux-gnu/libpthread.so.0
+7f4d45e88000-7f4d45e8c000 rw-p 00000000 00:00 0 
+7f4d45e8c000-7f4d45eab000 r--p 00000000 ca:02 132751                     /usr/lib/x86_64-linux-gnu/libssl.so.3
+7f4d45eab000-7f4d45f09000 rw-p 2d980000 00:15 4026532291                 /proc/xom
+7f4d45f09000-7f4d45f28000 r--p 0007d000 ca:02 132751                     /usr/lib/x86_64-linux-gnu/libssl.so.3
+7f4d45f28000-7f4d45f32000 r--p 0009c000 ca:02 132751                     /usr/lib/x86_64-linux-gnu/libssl.so.3
+7f4d45f32000-7f4d45f36000 rw-p 000a6000 ca:02 132751                     /usr/lib/x86_64-linux-gnu/libssl.so.3
+7f4d45f36000-7f4d45f65000 r--p 00000000 ca:02 155265                     /usr/lib/x86_64-linux-gnu/libxml2.so.2.9.14
+7f4d45f65000-7f4d46081000 rw-p 33000000 00:15 4026532291                 /proc/xom
+7f4d46081000-7f4d460d7000 r--p 0014b000 ca:02 155265                     /usr/lib/x86_64-linux-gnu/libxml2.so.2.9.14
+7f4d460d7000-7f4d460e0000 r--p 001a1000 ca:02 155265                     /usr/lib/x86_64-linux-gnu/libxml2.so.2.9.14
+7f4d460e0000-7f4d460e1000 rw-p 001aa000 ca:02 155265                     /usr/lib/x86_64-linux-gnu/libxml2.so.2.9.14
+7f4d460e1000-7f4d460e2000 rw-p 00000000 00:00 0 
+7f4d460e2000-7f4d460f2000 r--p 00000000 ca:02 170951                     /usr/lib/x86_64-linux-gnu/libm.so.6
+7f4d460f2000-7f4d46165000 rw-p 2da00000 00:15 4026532291                 /proc/xom
+7f4d46165000-7f4d461bf000 r--p 00083000 ca:02 170951                     /usr/lib/x86_64-linux-gnu/libm.so.6
+7f4d461bf000-7f4d461c0000 r--p 000dc000 ca:02 170951                     /usr/lib/x86_64-linux-gnu/libm.so.6
+7f4d461c0000-7f4d461c1000 rw-p 000dd000 ca:02 170951                     /usr/lib/x86_64-linux-gnu/libm.so.6
+7f4d461c1000-7f4d461c2000 r--p 00000000 ca:02 129828                     /usr/lib/libxom.so
+7f4d461c2000-7f4d461c4000 rw-p 0e6ac000 00:15 4026532291                 /proc/xom
+7f4d461c4000-7f4d461c5000 r--p 00003000 ca:02 129828                     /usr/lib/libxom.so
+7f4d461c5000-7f4d461c6000 r--p 00003000 ca:02 129828                     /usr/lib/libxom.so
+7f4d461c6000-7f4d461c7000 rw-p 00004000 ca:02 129828                     /usr/lib/libxom.so
+7f4d461cf000-7f4d461d1000 rw-p 00000000 00:00 0 
+7f4d461d1000-7f4d461d2000 r--p 00000000 ca:02 170945                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f4d461d2000-7f4d461f7000 rw-p 0e780000 00:15 4026532291                 /proc/xom
+7f4d461f7000-7f4d46201000 r--p 00026000 ca:02 170945                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f4d46201000-7f4d46203000 r--p 00030000 ca:02 170945                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7f4d46203000-7f4d46205000 rw-p 00032000 ca:02 170945                     /usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2
+7fff79d39000-7fff79d5a000 rw-p 00000000 00:00 0                          [stack]
+7fff79da4000-7fff79da8000 r--p 00000000 00:00 0                          [vvar]
+7fff79da8000-7fff79daa000 rw-p 0fa24000 00:15 4026532291                 /proc/xom
+
+7f4d461d2000
+Segfault in 0x7f4d461f4398
+

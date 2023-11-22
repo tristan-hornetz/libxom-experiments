@@ -656,7 +656,7 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
         line = NULL;
     }
     fclose(maps);
-    exit(0);
+    exit(1);
 }
 
 
