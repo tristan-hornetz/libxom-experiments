@@ -301,11 +301,11 @@ static inline int migrate_shared_libraries_internal(){
 }
 
 static inline int migrate_all_code_lax_internal(){
-    return migrate_skip_type(TEXT_TYPE_EXEMPT_ON_LAX);
+    return migrate_skip_type(TEXT_TYPE_EXEMPT_ON_LAX | TEXT_TYPE_SHARED);
 }
 
 static inline int migrate_all_code_internal(){
-    return migrate_skip_type(0xff);
+    return migrate_skip_type(0);
 }
 
 static p_xombuf xomalloc_page_internal(size_t size){
