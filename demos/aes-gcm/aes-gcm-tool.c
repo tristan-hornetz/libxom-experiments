@@ -235,7 +235,7 @@ static key_prime_fun* allocate_key_fun(){
     memcpy(&prime_fun, empty_key, sizeof(*empty_key));
     prime_fun.key_lo = key.u64[0];
     prime_fun.key_hi = key.u64[1];
-    xom_alloc_subpages(getpagesize());
+    subpages = xom_alloc_subpages(getpagesize());
     ret = (key_prime_fun*) xom_fill_and_lock_subpages(subpages, sizeof(prime_fun), &prime_fun);
     memset(&prime_fun, 0, sizeof (prime_fun));
     memset(&key, 0, sizeof(key));

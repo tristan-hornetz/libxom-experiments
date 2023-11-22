@@ -160,7 +160,7 @@ static int release_mapping(pxom_mapping mapping) {
 static pxom_process_entry get_process_entry(void) {
     pxom_process_entry curr_entry = (pxom_process_entry)xom_entries.next;
 
-    while ((void *)curr_entry != &xom_entries)
+    while ((void *)curr_entry != &xom_entries && curr_entry)
     {
         if (curr_entry->pid == current->pid)
             return curr_entry;
@@ -445,6 +445,8 @@ static int xom_release(struct inode *, struct file *)
 
     mutex_lock(&file_lock);
     curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
     status = release_process(curr_entry);
     list_del(&(curr_entry->lhead));
     kfree(curr_entry);
