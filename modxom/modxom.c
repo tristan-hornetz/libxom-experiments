@@ -429,10 +429,16 @@ exit:
 
 static int xom_open(struct inode *, struct file *)
 {
-    pxom_process_entry new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
+    pxom_process_entry new_entry;
+
+    mutex_lock(&file_lock);
+    if(get_process_entry(current->pid)){
+        mutex_unlock(&file_lock);
+        return -EINVAL;
+    }
+    new_entry = kmalloc(sizeof(*new_entry), GFP_KERNEL);
     new_entry->pid = current->pid;
     INIT_LIST_HEAD(&(new_entry->mappings));
-    mutex_lock(&file_lock);
     list_add(&(new_entry->lhead), &xom_entries);
     mutex_unlock(&file_lock);
     return 0;
@@ -445,8 +451,10 @@ static int xom_release(struct inode *, struct file *)
 
     mutex_lock(&file_lock);
     curr_entry = get_process_entry();
-    if(!curr_entry)
+    if(!curr_entry){
+        mutex_unlock(&file_lock);
         return -EINVAL;
+        }
     status = release_process(curr_entry);
     list_del(&(curr_entry->lhead));
     kfree(curr_entry);
