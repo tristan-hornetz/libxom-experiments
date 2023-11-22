@@ -623,7 +623,7 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
     ssize_t res, count = 0;
     FILE* maps;
 
-    printf("Segfault at %p!", (void*) siginfo->si_addr);
+    printf("Segfault at %p!\n", (void*) siginfo->si_addr);
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
@@ -637,12 +637,13 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
         line = NULL;
     }
     fclose(maps);
+    exit(0);
 }
 
 static void setup_debug_fault_handler(){
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = debug_fault_handler;
+    sa.sa_sigaction = (void*) debug_fault_handler;
     sigaction(SIGSEGV, &sa, NULL);
 }
 
