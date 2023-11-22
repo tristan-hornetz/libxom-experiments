@@ -601,7 +601,7 @@ void log_process_start(){
     char file[32] = {0, };
     char buf[PATH_MAX] = {0, };
     FILE *fp;
-    sprintf(file, "/proc/self/exe");
+    sprintf(file, "/proc/self/cmdline");
     fp = fopen(file, "r");
     if(!fp)
         return;
