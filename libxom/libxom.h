@@ -94,6 +94,8 @@ void xom_free(struct xombuf*);
 */
 int xom_migrate_all_code();
 
+int xom_migrate_all_code_lax();
+
 /** 
  * Migrate the code of all shared libraries that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been

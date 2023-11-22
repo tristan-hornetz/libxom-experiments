@@ -15,11 +15,12 @@
 
 #define LIBXOM_ENVVAR           "LIBXOM_LOCK"
 #define LIBXOM_ENVVAR_LOCK_ALL  "all"
+#define LIBXOM_ENVVAR_LOCK_LAX  "lax"
 #define LIBXOM_ENVVAR_LOCK_LIBS "libs"
 
 #define TEXT_TYPE_EXECUTABLE    1
-#define TEXT_TYPE_LIBC          2
-#define TEXT_TYPE_SHARED        3
+#define TEXT_TYPE_EXEMPT_ON_LAX 2
+#define TEXT_TYPE_SHARED        4
 
 #define PAGE_SIZE               0x1000
 #define PAGE_SHIFT              12
@@ -28,6 +29,7 @@
 
 #define SIZE_CEIL(S)            ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 #define min(x, y)               ((x) < (y) ? (x) : (y))
+#define countof(x)              (sizeof(x)/sizeof(*(x)))
 
 extern char **__environ;
 
@@ -57,6 +59,12 @@ static pthread_mutex_t lib_lock;
 static int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
 
+const static char* libs_exempt[] = {
+    "/ld-linux-x86-64",
+    "/libstdc++.so",
+    "/libc.so"
+};
+
 #define wrap_call(T, F) {           \
     T r;                            \
     __libxom_prologue();            \
@@ -83,7 +91,8 @@ static text_region* explore_text_regions(){
     char mpath[64] = {0, };
     char perms[3] = {0, };
     char *line = NULL;
-    int status, is_libc;
+    unsigned i;
+    int status, is_exempt;
     size_t start, end, last = 0, len = 0;
     ssize_t res, count = 0;
     FILE* maps;
@@ -113,7 +122,9 @@ static text_region* explore_text_regions(){
     count = 0;
     while ((res = getline(&line, &len, maps)) != -1) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
-        is_libc = strstr(line, "libc.so") ? 1 : 0;
+        is_exempt = 0;
+        for(i = 0; i < countof(libs_exempt) && !is_exempt; i++)
+            is_exempt |= strstr(line, libs_exempt[i]) ? 1 : 0;
         free(line);
         line = NULL;
         if(status != 5)
@@ -126,8 +137,8 @@ static text_region* explore_text_regions(){
 
         if (!count)
             regions[count].type = TEXT_TYPE_EXECUTABLE;
-        else if (is_libc)
-            regions[count].type = TEXT_TYPE_LIBC;
+        else if (is_exempt)
+            regions[count].type = TEXT_TYPE_EXEMPT_ON_LAX;
         else
             regions[count].type = TEXT_TYPE_SHARED;
         
@@ -271,7 +282,7 @@ static int migrate_skip_type(unsigned int skip_type){
         return -1;
 
     while(spaces[i].type){
-        if(spaces[i].type != skip_type){
+        if(!(spaces[i].type & skip_type)){
             status = migrate_text_section(&(spaces[i]));
             if(status < 0)
                 break;
@@ -287,6 +298,10 @@ static int migrate_skip_type(unsigned int skip_type){
 
 static inline int migrate_shared_libraries_internal(){
     return migrate_skip_type(TEXT_TYPE_EXECUTABLE);
+}
+
+static inline int migrate_all_code_lax_internal(){
+    return migrate_skip_type(TEXT_TYPE_EXEMPT_ON_LAX);
 }
 
 static inline int migrate_all_code_internal(){
@@ -572,6 +587,10 @@ int xom_migrate_all_code(){
     wrap_call(int, migrate_all_code_internal());
 }
 
+int xom_migrate_all_code_lax(){
+    wrap_call(int, migrate_all_code_lax_internal());
+}
+
 int xom_migrate_shared_libraries(){
     wrap_call(int, migrate_shared_libraries_internal());
 }
@@ -640,6 +659,29 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
     exit(0);
 }
 
+static void pmaps() {
+    char mpath[64] = {0, };
+    char perms[3] = {0, };
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t res, count = 0;
+    FILE* maps;
+
+    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
+    maps = fopen(mpath, "r");
+    if(!maps)
+        return;
+    
+    // Get amount of executable memory regions
+    while ((res = getline(&line, &len, maps)) != -1) {
+        printf("%s", line);
+        free(line);
+        line = NULL;
+    }
+    fclose(maps);
+}
+
+
 static void setup_debug_fault_handler(){
     struct sigaction sa;
     sa.sa_flags = SA_SIGINFO;
@@ -663,9 +705,12 @@ static void initialize_libxom() {
             migrate_all_code_internal();
             break;
         }
+        else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LAX)){
+            migrate_all_code_lax_internal();
+            break;
+        }
         else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
             migrate_shared_libraries_internal();
-            setup_debug_fault_handler();
             break;
         }
         envp++;
@@ -674,6 +719,7 @@ static void initialize_libxom() {
     while(*envp) {
         if(strstr(*envp, "LIBXOM_LOG_STARTUP=true")){
             log_process_start();
+            setup_debug_fault_handler();
             break;
         }
         envp++;
@@ -681,6 +727,7 @@ static void initialize_libxom() {
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
+    pmaps();
     pthread_mutex_unlock(&lib_lock);
 }
 
