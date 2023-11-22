@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 #include <immintrin.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -596,8 +597,26 @@ int is_xom_supported(){
     wrap_call(int, is_xom_supported_internal());
 }
 
+void log_process_start(){
+    char file[32] = {0, };
+    char buf[PATH_MAX] = {0, };
+    FILE *fp;
+    sprintf(file, "/proc/self/cmdline");
+    fp = fopen(file, "r");
+    if(!fp)
+        return;
+    fgets(buf, 64, fp);
+    fclose(fp);
+    fp = fopen("/tmp/libxom.log", "a");
+    if(!fp) 
+        return;
+    fprintf(fp, "%s [%lu]\n", buf, getpid());
+    fclose(fp);
+}
+
 __attribute__((constructor))
 static void initialize_libxom() {
+    FILE* fp;
     char** envp = __environ;
     uintptr_t rval = 0;
     if(initialized)
@@ -613,6 +632,14 @@ static void initialize_libxom() {
         }
         else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
             migrate_shared_libraries_internal();
+            break;
+        }
+        envp++;
+    }
+    envp = __environ;
+    while(*envp) {
+        if(strstr(*envp, "LIBXOM_LOG_STARTUP=true")){
+            log_process_start();
             break;
         }
         envp++;
