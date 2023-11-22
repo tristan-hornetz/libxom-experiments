@@ -94,7 +94,7 @@ static text_region* explore_text_regions(){
     unsigned i;
     int status, is_exempt;
     size_t start, end, last = 0, len = 0;
-    ssize_t res, count = 0;
+    ssize_t count = 0;
     FILE* maps;
     text_region* regions;
 
@@ -104,7 +104,7 @@ static text_region* explore_text_regions(){
         return NULL;
     
     // Get amount of executable memory regions
-    while ((res = getline(&line, &len, maps)) != -1) {
+    while (getline(&line, &len, maps)) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
         free(line);
         line = NULL;
@@ -120,7 +120,7 @@ static text_region* explore_text_regions(){
         return NULL;
 
     count = 0;
-    while ((res = getline(&line, &len, maps)) != -1) {
+    while (getline(&line, &len, maps)) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
         is_exempt = 0;
         for(i = 0; i < countof(libs_exempt) && !is_exempt; i++)
@@ -422,12 +422,14 @@ static struct xom_subpages* xom_alloc_subpages_internal(size_t size){
     int status;
     modxom_cmd cmd;
     p_xom_subpages ret = NULL;
-    p_xombuf xombuf = xomalloc_page_internal(size);
+    p_xombuf xombuf;
+
+    if(size > ALLOC_CHUNK_SIZE)
+        return NULL;
+
+    xombuf = xomalloc_page_internal(size);
 
     if(!xombuf)
-        return NULL;
-    
-    if(size > ALLOC_CHUNK_SIZE)
         return NULL;
     
     cmd.cmd = MODXOM_CMD_INIT_SUBPAGES;
@@ -490,10 +492,8 @@ static void* write_into_subpages(struct xom_subpages* dest, size_t subpages_requ
     
     free(write_cmd);
     
-    if(status < 0){
-        status = -EINVAL;
+    if(status < 0)
         return NULL;
-    }
 
     dest->lock_status[base_page] |= mask << base_subpage;
     dest->references++;
