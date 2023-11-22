@@ -179,6 +179,7 @@ static ssize_t read_input_file(char** input){
     else {
         free(*input);
         *input = NULL;
+        goto exit;
     }
 
     if(block_align(file_size) > file_size)
