@@ -113,7 +113,10 @@ aes_encrypt:
     push %rsi
 
     // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    call *%rdi
+    jmp *%rdi
+
+.globl __aes_encrypt_key_prime_return
+__aes_encrypt_key_prime_return:
 
     // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
     movlhps	%xmm1, %xmm0
@@ -163,7 +166,10 @@ aes_decrypt:
     push %rsi
 
     // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    call *%rdi
+    jmp *%rdi
+
+.globl __aes_decrypt_key_prime_return
+__aes_decrypt_key_prime_return:
 
     // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
     movlhps	%xmm1, %xmm0
@@ -217,8 +223,12 @@ aes_encrypt_counter:
     push %rbp
     mov %rsp, %rbp
 
+    push %rcx
     // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    call *%rdi
+    jmp *%rdi
+
+.global __aes_encrypt_counter_key_prime_return
+__aes_encrypt_counter_key_prime_return:
 
     // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
     movlhps	%xmm1, %xmm0

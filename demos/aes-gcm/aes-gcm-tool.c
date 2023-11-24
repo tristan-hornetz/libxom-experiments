@@ -15,16 +15,13 @@
 
 #define block_align(s) ((s) + (((s) % GCM_BLOCK_BYTES) ? (GCM_BLOCK_BYTES - (s) % GCM_BLOCK_BYTES) : 0))
 
-union {
-    uint64_t u64[2];
-    __m128i u128;
-} typedef uint128;
-_Static_assert(sizeof(uint128) == sizeof(__m128i), "Size of uint128 does not align!");
+
+_Static_assert(sizeof(aes_uint128) == sizeof(__m128i), "Size of aes_uint128 does not align!");
 
 static struct xom_subpages* subpages = NULL;
 static char *infile = NULL, *outfile = NULL, *iv_str = NULL, *tag_str = NULL, *key_str = NULL;
 static int enc = 0, dec = 0;
-static uint128 key, iv, tag = {.u64 = {0, 0}};
+static aes_uint128 key, iv, tag = {.u64 = {0, 0}};
 
 const static struct option long_options[] = {
         {"encrypt", no_argument,       &enc, 1},
@@ -37,10 +34,10 @@ const static struct option long_options[] = {
         {0, 0,                         0,    0}
 };
 
-static int parse_u128(const char* restrict in, uint128 *restrict out){
+static int parse_u128(const char* restrict in, aes_uint128 *restrict out){
     int i;
     size_t slen;
-    char padded_input[2 * sizeof(uint128) + 1], b1[17];
+    char padded_input[2 * sizeof(aes_uint128) + 1], b1[17];
 
     memset(padded_input, 0, sizeof(padded_input));
     memset(b1, 0, sizeof(b1));
@@ -48,10 +45,10 @@ static int parse_u128(const char* restrict in, uint128 *restrict out){
 
     slen = strlen(in);
 
-    if(slen > 2 * sizeof(uint128))
+    if(slen > 2 * sizeof(aes_uint128))
         return -1;
 
-    strncpy(&padded_input[2 * sizeof(uint128) - slen] , in, slen);
+    strncpy(&padded_input[2 * sizeof(aes_uint128) - slen] , in, slen);
 
     for(i = 0; i < 16; i++){
         b1[i] = padded_input[i] ? padded_input[i] : '0';
@@ -215,11 +212,8 @@ static key_prime_fun* allocate_key_fun_noxom(){
         return NULL;
 
     memcpy(ret, empty_key, sizeof(*empty_key));
-    ret->key_lo = key.u64[0];
-    ret->key_hi = key.u64[1];
-
-    mprotect(ret, getpagesize(), PROT_EXEC);
-    memset(&key, 0, sizeof(key));
+    init_counter_mode_key(ret, &key);
+    mprotect(ret, getpagesize(), PROT_EXEC | PROT_READ);
 
     return ret;
 
@@ -234,12 +228,10 @@ static key_prime_fun* allocate_key_fun(){
     }
 
     memcpy(&prime_fun, empty_key, sizeof(*empty_key));
-    prime_fun.key_lo = key.u64[0];
-    prime_fun.key_hi = key.u64[1];
+    init_counter_mode_key(&prime_fun, &key);
     subpages = xom_alloc_subpages(getpagesize());
     ret = (key_prime_fun*) xom_fill_and_lock_subpages(subpages, sizeof(prime_fun), &prime_fun);
     memset(&prime_fun, 0, sizeof (prime_fun));
-    memset(&key, 0, sizeof(key));
     return ret;
 }
 
@@ -280,6 +272,7 @@ int main(int argc, char *argv[]) {
         .tag = (char *restrict) &tag,
         .iv = (char *restrict) &iv,
         .iv_len = sizeof (iv),
+        .key_type = AES_KEY_TYPE_ENCRYPT_COUNTER
     };
 
     if(enc)
