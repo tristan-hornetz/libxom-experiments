@@ -59,7 +59,7 @@ int aes_gcm_encrypt(aes_gcm_context *restrict c){
     unsigned char *restrict tbuf;
 
     // Get H for gfmul
-    aes_encrypt(c->key, zeroes_16, &H);
+    aes_encrypt_counter(c->key, (void*) zeroes_16, (void*)zeroes_16, &H, 1);
 
     // Get initial counter block J0
     J1 = J0 = getJ0(c, H);
@@ -102,7 +102,7 @@ int aes_gcm_decrypt(aes_gcm_context *restrict c){
     unsigned char tag_reconstructed[GCM_BLOCK_BYTES] = {0, };
 
     // Get H for gfmul
-    aes_encrypt(c->key, zeroes_16, &H);
+    aes_encrypt_counter(c->key, (void*) zeroes_16, (void*)zeroes_16, &H, 1);
 
     // Get initial counter block J0
     J1 = J0 = getJ0(c, H);
