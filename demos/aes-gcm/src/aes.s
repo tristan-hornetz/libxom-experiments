@@ -290,12 +290,3 @@ aes_encrypt_counter_enc_exit:
     call clear_sse_regs
     leave
     ret
-
-.globl prime_key
-prime_key:
-    movabs $0x123456789abcdef,%rax
-    movq   %rax,%xmm0
-    movabs $0x123456789abcdef,%rax
-    movq   %rax,%xmm1
-    movabs $0x1234567890abdef,%rax
-    jmp *%rax
