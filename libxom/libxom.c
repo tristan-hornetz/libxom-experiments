@@ -79,10 +79,9 @@ static inline void __libxom_epilogue(){
 
 void *dlopen(const char *filename, int flags){
     void* ret = dlopen_original(filename, flags);
-    migrate_skip_type(TEXT_TYPE_VDSO | TEXT_TYPE_EXECUTABLE);
+    migrate_skip_type(TEXT_TYPE_VDSO);
     return ret;
 }
-
 
 
 /**
@@ -202,7 +201,7 @@ static __attribute__((optimize("O0"))) int remap_no_libc(text_region* space, cha
             "mov %%rax, %0"
             : "=r" (rptr) 
             : "a"(SYS_mmap), "D"(remapping), "S"(min(size_left, ALLOC_CHUNK_SIZE)), 
-                "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
+                "d"(PROT_NONE), "c"(MAP_PRIVATE), "b"(fd)
             : "r8", "r9", "r10"
         );
 
@@ -229,7 +228,7 @@ static __attribute__((optimize("O0"))) int remap_no_libc(text_region* space, cha
 */
 static int migrate_text_section(text_region* space){
     int status;
-    unsigned int i, c = 0;
+    unsigned int c = 0;
     char* dest;
     size_t num_pages = (space->text_end - space->text_base) >> PAGE_SHIFT;
     ssize_t size_left;
