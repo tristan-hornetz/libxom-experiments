@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdint.h>
 #include <pthread.h>
 #include <fcntl.h>
@@ -8,6 +9,7 @@
 #include <limits.h>
 #include <signal.h>
 #include <immintrin.h>
+#include <ucontext.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include "libxom.h"
@@ -634,7 +636,7 @@ void log_process_start(){
     fclose(fp);
 }
 
-static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
+static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t * context) {
     char mpath[64] = {0, };
     char perms[3] = {0, };
     char *line = NULL;
@@ -642,7 +644,25 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
     ssize_t count = 0;
     FILE* maps;
 
-    printf("Segfault at %p!\n", (void*) siginfo->si_addr);
+    printf("Segfault!\n"
+           "RIP: %p\n"
+           "RSP: %p\n"
+           "RAX: %p\n"
+           "RBX: %p\n"
+           "RCX: %p\n"
+           "RDX: %p\n"
+           "RDI: %p\n"
+           "RSI: %p\n"
+           ,
+           (void*) context->uc_mcontext.gregs[REG_RIP],
+           (void*) context->uc_mcontext.gregs[REG_RSP],
+           (void*) context->uc_mcontext.gregs[REG_RAX],
+           (void*) context->uc_mcontext.gregs[REG_RBX],
+           (void*) context->uc_mcontext.gregs[REG_RCX],
+           (void*) context->uc_mcontext.gregs[REG_RDX],
+           (void*) context->uc_mcontext.gregs[REG_RDI],
+           (void*) context->uc_mcontext.gregs[REG_RSI]
+           );
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
