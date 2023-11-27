@@ -90,7 +90,6 @@ static text_region* explore_text_regions(){
     FILE* maps;
     text_region* regions;
 
-    printf("Got VDSO at %p\n", (void*) vdso_base);
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
