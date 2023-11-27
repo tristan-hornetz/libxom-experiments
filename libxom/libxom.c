@@ -238,7 +238,7 @@ static int migrate_text_section(text_region* space){
     int (*remap_function)(text_region*, char*, int32_t);
     modxom_cmd cmd;
 
-    // printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
+    printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
 
     // Mmap code backup
     dest = mmap(NULL, num_pages << PAGE_SHIFT, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -686,9 +686,11 @@ static void setup_debug_fault_handler(){
 
 __attribute__((constructor))
 static void initialize_libxom() {
-    FILE* fp;
     char** envp = __environ;
     uintptr_t rval = 0;
+
+    printf("Libxom! %u\n", initialized);
+
     if(initialized)
         return;
     pthread_mutex_init(&lib_lock, NULL);
