@@ -60,6 +60,9 @@ static volatile int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
 static void* (*dlopen_original)(const char *, int) = NULL;
 static void* (*dlmopen_original)(Lmid_t, const char *, int) = NULL;
+#ifndef MODXOM_STATIC
+static int (*main_original)(int argc, char* argv[], char* envp[]);
+#endif
 
 #define wrap_call(T, F) {           \
     T r;                            \
@@ -98,6 +101,13 @@ void *dlmopen(Lmid_t lmid, const char *filename, int flags){
         migrate_skip_type(TEXT_TYPE_VDSO);
     return ret;
 }
+
+#ifndef MODXOM_STATIC
+int main(int argc, char* argv[], char* envp[]){
+    migrate_skip_type(TEXT_TYPE_VDSO);
+    return main_original(argc, argv, envp);
+}
+#endif
 
 /**
  * Parse the /proc/<pid>/maps file to find all executable memory segments
@@ -635,6 +645,9 @@ static inline void install_dlopen_hook(void){
     dlmopen_original = dlsym(RTLD_NEXT, "dlmopen");
     if(dlmopen_original == dlmopen)
         dlmopen_original = NULL;
+    #ifndef MODXOM_STATIC
+    main_original = dlsym(RTLD_NEXT, "main");
+    #endif
 }
 
 __attribute__((constructor))

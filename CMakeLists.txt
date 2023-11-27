@@ -21,7 +21,7 @@ add_library(xom-static STATIC
     "libxom/libxom.c"
 )
 target_link_libraries(xom-static PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-target_compile_options(xom-static PUBLIC "-mrdrnd")
+target_compile_options(xom-static PUBLIC "-mrdrnd;-DMODXOM_STATIC")
 
 add_subdirectory(demos)
 
