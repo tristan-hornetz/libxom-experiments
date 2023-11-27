@@ -199,7 +199,7 @@ static __attribute__((optimize("O0"))) int remap_no_libc(text_region* space, cha
             "mov %%rax, %0"
             : "=r" (rptr) 
             : "a"(SYS_mmap), "D"(remapping), "S"(min(size_left, ALLOC_CHUNK_SIZE)), 
-                "d"(PROT_READ | PROT_WRITE), "c"(MAP_PRIVATE), "b"(fd)
+                "d"(PROT_NONE), "c"(MAP_PRIVATE), "b"(fd)
             : "r8", "r9", "r10"
         );
 
@@ -254,10 +254,6 @@ static int migrate_text_section(text_region* space){
 
     // Remap code into XOM buffer
     status = remap_function(space, dest, xomfd);
-
-    status = mprotect(space->text_base + c * ALLOC_CHUNK_SIZE, min(size_left, ALLOC_CHUNK_SIZE), PROT_NONE);
-    if(status < 0)
-        printf("Mprotect failed, errno %d\n", errno);
 
     // Lock code
     size_left = (space->text_end - space->text_base);
