@@ -616,6 +616,8 @@ int is_xom_supported(){
     wrap_call(int, is_xom_supported_internal());
 }
 
+
+#ifdef DEBUG_FAULT_HANDLER
 void log_process_start(){
     char file[32] = {0, };
     char buf[PATH_MAX] = {0, };
@@ -633,12 +635,11 @@ void log_process_start(){
     fclose(fp);
 }
 
-static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t * context) {
+static void debug_fault_handler(int __attribute__((unused)) signum,
+                                siginfo_t * __attribute__((unused)) siginfo, ucontext_t * context) {
     char mpath[64] = {0, };
-    char perms[3] = {0, };
     char *line = NULL;
     size_t len = 0;
-    ssize_t count = 0;
     FILE* maps;
 
     printf("Segfault!\n"
@@ -649,8 +650,7 @@ static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t * co
            "RCX: %p\n"
            "RDX: %p\n"
            "RDI: %p\n"
-           "RSI: %p\n"
-           ,
+           "RSI: %p\n",
            (void*) context->uc_mcontext.gregs[REG_RIP],
            (void*) context->uc_mcontext.gregs[REG_RSP],
            (void*) context->uc_mcontext.gregs[REG_RAX],
@@ -683,6 +683,7 @@ static void setup_debug_fault_handler(){
     sa.sa_sigaction = (void*) debug_fault_handler;
     sigaction(SIGSEGV, &sa, NULL);
 }
+#endif
 
 __attribute__((constructor))
 static void initialize_libxom() {
@@ -708,6 +709,7 @@ static void initialize_libxom() {
         }
         envp++;
     }
+    #ifdef DEBUG_FAULT_HANDLER
     envp = __environ;
     while(*envp) {
         if(strstr(*envp, "LIBXOM_LOG_STARTUP=true")){
@@ -717,6 +719,7 @@ static void initialize_libxom() {
         }
         envp++;
     }
+    #endif
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));

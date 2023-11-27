@@ -5,6 +5,8 @@ set(CMAKE_C_STANDARD 11)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 find_package(Threads REQUIRED)
 
+set(CMAKE_C_FLAGS_DEBUG "-O0 -DDEBUG_FAULT_HANDLER")
+
 add_subdirectory("modxom")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libxom)
