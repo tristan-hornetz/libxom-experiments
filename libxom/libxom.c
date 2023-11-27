@@ -6,6 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <immintrin.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include "libxom.h"
@@ -16,8 +17,9 @@
 #define LIBXOM_ENVVAR_LOCK_LIBS "libs"
 
 #define TEXT_TYPE_EXECUTABLE    1
-#define TEXT_TYPE_LIBC          2
-#define TEXT_TYPE_SHARED        3
+#define TEXT_TYPE_LIBC          (1 << 1)
+#define TEXT_TYPE_SHARED        (1 << 2)
+#define TEXT_TYPE_VDSO          (1 << 3)
 
 #define PAGE_SIZE               0x1000
 #define PAGE_SHIFT              12
@@ -52,7 +54,7 @@ struct {
 
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static int32_t xomfd = -1;
+static volatile int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
 
 #define wrap_call(T, F) {           \
@@ -78,6 +80,7 @@ static inline void __libxom_epilogue(){
  *  entry with .type = 0. The caller must free this array
 */
 static text_region* explore_text_regions(){
+    const unsigned long vdso_base = getauxval(AT_SYSINFO_EHDR);
     char mpath[64] = {0, };
     char perms[3] = {0, };
     char *line = NULL;
@@ -86,6 +89,8 @@ static text_region* explore_text_regions(){
     ssize_t count = 0;
     FILE* maps;
     text_region* regions;
+
+    printf("Got VDSO at %p\n", (void*) vdso_base);
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
@@ -126,6 +131,8 @@ static text_region* explore_text_regions(){
             regions[count].type = TEXT_TYPE_EXECUTABLE;
         else if (is_libc)
             regions[count].type = TEXT_TYPE_LIBC;
+        else if (regions[count].text_base == (char*) vdso_base)
+            regions[count].type = TEXT_TYPE_VDSO;
         else
             regions[count].type = TEXT_TYPE_SHARED;
         
@@ -269,7 +276,7 @@ static int migrate_skip_type(unsigned int skip_type){
         return -1;
 
     while(spaces[i].type){
-        if(spaces[i].type != skip_type){
+        if(!(spaces[i].type & skip_type)){
             status = migrate_text_section(&(spaces[i]));
             if(status < 0)
                 break;
@@ -284,11 +291,11 @@ static int migrate_skip_type(unsigned int skip_type){
 }
 
 static inline int migrate_shared_libraries_internal(){
-    return migrate_skip_type(TEXT_TYPE_EXECUTABLE);
+    return migrate_skip_type(TEXT_TYPE_EXECUTABLE | TEXT_TYPE_VDSO);
 }
 
 static inline int migrate_all_code_internal(){
-    return migrate_skip_type(0xff);
+    return migrate_skip_type(TEXT_TYPE_VDSO);
 }
 
 static p_xombuf xomalloc_page_internal(size_t size){
