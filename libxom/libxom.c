@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #include <immintrin.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
@@ -56,6 +57,7 @@ static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
 static volatile int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
+static void* (*dlopen_original)(const char *, int) = NULL;
 
 #define wrap_call(T, F) {           \
     T r;                            \
@@ -65,6 +67,8 @@ static void* xom_base_addr = NULL;
     return r;                       \
 }
 
+static int migrate_skip_type(unsigned int);
+
 static inline void __libxom_prologue(){
     pthread_mutex_lock(&lib_lock);
 }
@@ -72,6 +76,14 @@ static inline void __libxom_prologue(){
 static inline void __libxom_epilogue(){
     pthread_mutex_unlock(&lib_lock);
 }
+
+void *dlopen(const char *filename, int flags){
+    void* ret = dlopen_original(filename, flags);
+    migrate_skip_type(TEXT_TYPE_VDSO | TEXT_TYPE_EXECUTABLE);
+    return ret;
+}
+
+
 
 /**
  * Parse the /proc/<pid>/maps file to find all executable memory segments
@@ -602,16 +614,26 @@ int is_xom_supported(){
     wrap_call(int, is_xom_supported_internal());
 }
 
+static inline void install_dlopen_hook(void){
+    dlopen_original = dlsym(RTLD_NEXT, "dlopen");
+    if(dlopen_original == dlopen)
+        dlopen_original = NULL;
+}
+
 __attribute__((constructor))
 static void initialize_libxom() {
     char** envp = __environ;
     uintptr_t rval = 0;
+
     if(initialized)
         return;
+
     pthread_mutex_init(&lib_lock, NULL);
     initialized = 1;
     pthread_mutex_lock(&lib_lock);
+
     xomfd = open("/proc/xom", O_RDWR);
+
     while(*envp) {
         if(strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)){
             migrate_all_code_internal();
@@ -623,9 +645,13 @@ static void initialize_libxom() {
         }
         envp++;
     }
+
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
+
+    install_dlopen_hook();
+
     pthread_mutex_unlock(&lib_lock);
 }
 
