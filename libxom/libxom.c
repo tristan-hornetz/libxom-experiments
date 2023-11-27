@@ -255,6 +255,10 @@ static int migrate_text_section(text_region* space){
     // Remap code into XOM buffer
     status = remap_function(space, dest, xomfd);
 
+    status = mprotect(space->text_base + c * ALLOC_CHUNK_SIZE, min(size_left, ALLOC_CHUNK_SIZE), PROT_NONE);
+    if(status < 0)
+        printf("Mprotect failed");
+
     // Lock code
     size_left = (space->text_end - space->text_base);
     while(status >= 0 && size_left > 0){
