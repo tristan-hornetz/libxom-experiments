@@ -10,6 +10,7 @@
 #include <signal.h>
 #include <immintrin.h>
 #include <ucontext.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include "libxom.h"
@@ -17,12 +18,12 @@
 
 #define LIBXOM_ENVVAR           "LIBXOM_LOCK"
 #define LIBXOM_ENVVAR_LOCK_ALL  "all"
-#define LIBXOM_ENVVAR_LOCK_LAX  "lax"
 #define LIBXOM_ENVVAR_LOCK_LIBS "libs"
 
 #define TEXT_TYPE_EXECUTABLE    1
-#define TEXT_TYPE_EXEMPT_ON_LAX 2
-#define TEXT_TYPE_SHARED        4
+#define TEXT_TYPE_LIBC          (1 << 1)
+#define TEXT_TYPE_SHARED        (1 << 2)
+#define TEXT_TYPE_VDSO          (1 << 3)
 
 #define PAGE_SIZE               0x1000
 #define PAGE_SHIFT              12
@@ -58,7 +59,7 @@ struct {
 
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static int32_t xomfd = -1;
+static volatile int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
 
 const static char* libs_exempt[] = {
@@ -90,15 +91,17 @@ static inline void __libxom_epilogue(){
  *  entry with .type = 0. The caller must free this array
 */
 static text_region* explore_text_regions(){
+    const unsigned long vdso_base = getauxval(AT_SYSINFO_EHDR);
     char mpath[64] = {0, };
     char perms[3] = {0, };
     char *line = NULL;
     unsigned i;
-    int status, is_exempt;
+    int status, is_libc;
     size_t start, end, last = 0, len = 0;
     ssize_t count = 0;
     FILE* maps;
     text_region* regions;
+
 
     snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
@@ -124,9 +127,9 @@ static text_region* explore_text_regions(){
     count = 0;
     while (getline(&line, &len, maps) > 0) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
-        is_exempt = 0;
-        for(i = 0; i < countof(libs_exempt) && !is_exempt; i++)
-            is_exempt |= strstr(line, libs_exempt[i]) ? 1 : 0;
+        is_libc = 0;
+        for(i = 0; i < countof(libs_exempt) && !is_libc; i++)
+            is_libc |= strstr(line, libs_exempt[i]) ? 1 : 0;
         free(line);
         line = NULL;
         if(status != 5)
@@ -139,8 +142,10 @@ static text_region* explore_text_regions(){
 
         if (!count)
             regions[count].type = TEXT_TYPE_EXECUTABLE;
-        else if (is_exempt)
-            regions[count].type = TEXT_TYPE_EXEMPT_ON_LAX;
+        else if (is_libc)
+            regions[count].type = TEXT_TYPE_LIBC;
+        else if (regions[count].text_base == (char*) vdso_base)
+            regions[count].type = TEXT_TYPE_VDSO;
         else
             regions[count].type = TEXT_TYPE_SHARED;
         
@@ -299,15 +304,11 @@ static int migrate_skip_type(unsigned int skip_type){
 }
 
 static inline int migrate_shared_libraries_internal(){
-    return migrate_skip_type(TEXT_TYPE_EXECUTABLE);
-}
-
-static inline int migrate_all_code_lax_internal(){
-    return migrate_skip_type(TEXT_TYPE_EXEMPT_ON_LAX | TEXT_TYPE_SHARED);
+    return migrate_skip_type(TEXT_TYPE_EXECUTABLE | TEXT_TYPE_VDSO);
 }
 
 static inline int migrate_all_code_internal(){
-    return migrate_skip_type(0);
+    return migrate_skip_type(TEXT_TYPE_VDSO);
 }
 
 static p_xombuf xomalloc_page_internal(size_t size){
@@ -589,10 +590,6 @@ int xom_migrate_all_code(){
     wrap_call(int, migrate_all_code_internal());
 }
 
-int xom_migrate_all_code_lax(){
-    wrap_call(int, migrate_all_code_lax_internal());
-}
-
 int xom_migrate_shared_libraries(){
     wrap_call(int, migrate_shared_libraries_internal());
 }
@@ -701,10 +698,6 @@ static void initialize_libxom() {
     while(*envp) {
         if(strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)){
             migrate_all_code_internal();
-            break;
-        }
-        else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LAX)){
-            migrate_all_code_lax_internal();
             break;
         }
         else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
