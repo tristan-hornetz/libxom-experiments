@@ -257,7 +257,7 @@ static int migrate_text_section(text_region* space){
 
     status = mprotect(space->text_base + c * ALLOC_CHUNK_SIZE, min(size_left, ALLOC_CHUNK_SIZE), PROT_NONE);
     if(status < 0)
-        printf("Mprotect failed");
+        printf("Mprotect failed, errno %d\n", errno);
 
     // Lock code
     size_left = (space->text_end - space->text_base);
