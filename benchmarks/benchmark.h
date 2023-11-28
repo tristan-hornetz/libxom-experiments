@@ -121,6 +121,6 @@ FILE* open_benchmark_file(const char* restrict name);
 int init_utils(void);
 int exit_utils(void);
 void flush_all(void* p, size_t size);
-void write_list(FILE*restrict fp, unsigned * data, size_t len, const char end_separator);
+void write_list(FILE*restrict fp, uint64_t * data, size_t len, char end_separator);
 
 #endif

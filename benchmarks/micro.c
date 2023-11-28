@@ -34,7 +34,7 @@ static inline __attribute__((always_inline)) uint32_t next_prime(uint32_t last, 
     return last;
 }
 
-static __attribute__((aligned(PAGE_SIZE))) void get_primes(uint32_t primes[NUM_PRIMES], double (*sqrt_)(double)){
+static __attribute__((aligned(PAGE_SIZE))) volatile void get_primes(uint32_t primes[NUM_PRIMES], double (*sqrt_)(double)){
     uint32_t cur = 1, n = 0;
     while (n < NUM_PRIMES){
         cur = next_prime(cur, sqrt_);
@@ -47,9 +47,9 @@ benchmark(primes){
     const static unsigned num_repetitions = 3;
     unsigned i;
     uint64_t timer;
-    void (*get_primes_xom)(uint32_t primes[], double (*)(double));
+    volatile void (*get_primes_xom)(uint32_t primes[], double (*)(double));
     struct xombuf* primes_xom_buf = xom_alloc_pages(PAGE_SIZE);
-    unsigned times[num_repetitions];
+    uint64_t times[num_repetitions];
 
     xom_write(primes_xom_buf, get_primes, PAGE_SIZE);
     get_primes_xom = xom_lock(primes_xom_buf);
@@ -89,7 +89,7 @@ benchmark(nop_slide) {
     struct xombuf* nop_slide_xom = xom_alloc_pages(PAGE_SIZE);
     void (*nop_slide_fun)(void) = ((void (*)(void))nop_slide);
     void (*nop_slide_xom_fun)(void);
-    unsigned times[num_repetitions];
+    uint64_t times[num_repetitions];
 
 
     memset(nop_slide, NOP, PAGE_SIZE);

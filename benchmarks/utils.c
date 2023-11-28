@@ -124,12 +124,12 @@ int exit_utils(void){
         free(os_version);
 }
 
-void write_list(FILE*restrict fp, unsigned * data, size_t len, const char end_separator){
+void write_list(FILE*restrict fp, uint64_t * data, size_t len, const char end_separator){
     size_t i;
 
     fprintf(fp, "[");
     for(i = 0; i < len; i++){
-        fprintf(fp, "0x%x, ", data[i]);
+        fprintf(fp, "0x%lx, ", data[i]);
         if(!((i + 1) % 50)) fprintf(fp, "\n");
     }
     fprintf(fp, "]%c\n",end_separator);
