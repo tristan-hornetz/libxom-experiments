@@ -41,7 +41,6 @@ static __attribute__((aligned(PAGE_SIZE))) void get_primes(uint32_t primes[NUM_P
         primes[n] = cur;
         n++;
     }
-    printf("\n%lu is the %lu-th prime!\n", cur, n);
 }
 
 benchmark(primes){
