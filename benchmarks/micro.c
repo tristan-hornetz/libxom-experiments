@@ -57,18 +57,6 @@ benchmark(primes){
     for(i = 0; i < num_repetitions; i++) {
         memset(primes_, 0, sizeof(primes_));
         START_TIMER;
-        get_primes(primes_, sqrt);
-        (void) primes_;
-        TIME_ELAPSED(timer);
-        times[i] = timer;
-    }
-
-    fprintf(fp, "prime_times_noxom = ");
-    write_list(fp, times, countof(times), '\n');
-
-    for(i = 0; i < num_repetitions; i++) {
-        memset(primes_, 0, sizeof(primes_));
-        START_TIMER;
         get_primes_xom(primes_, sqrt);
         (void) primes_;
         TIME_ELAPSED(timer);
@@ -76,6 +64,18 @@ benchmark(primes){
     }
 
     fprintf(fp, "prime_times_xom = ");
+    write_list(fp, times, countof(times), '\n');
+
+    for(i = 0; i < num_repetitions; i++) {
+        memset(primes_, 0, sizeof(primes_));
+        START_TIMER;
+        get_primes(primes_, sqrt);
+        (void) primes_;
+        TIME_ELAPSED(timer);
+        times[i] = timer;
+    }
+
+    fprintf(fp, "prime_times_noxom = ");
     write_list(fp, times, countof(times), '\n');
 
     return 0;
