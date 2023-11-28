@@ -130,7 +130,7 @@ void write_list(FILE*restrict fp, unsigned * data, size_t len, const char end_se
     fprintf(fp, "[");
     for(i = 0; i < len; i++){
         fprintf(fp, "0x%x, ", data[i]);
-        if(!(i % 50)) fprintf(fp, "\n");
+        if(!((i + 1) % 50)) fprintf(fp, "\n");
     }
     fprintf(fp, "]%c\n",end_separator);
 }

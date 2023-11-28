@@ -44,18 +44,18 @@ static __attribute__((aligned(PAGE_SIZE))) void get_primes(uint32_t primes[NUM_P
 }
 
 benchmark(primes){
-    const static unsigned num_repetitions = 10;
+    const static unsigned num_repetitions = 3;
     unsigned i;
     uint64_t timer;
     void (*get_primes_xom)(uint32_t primes[], double (*)(double));
     struct xombuf* primes_xom_buf = xom_alloc_pages(PAGE_SIZE);
     unsigned times[num_repetitions];
 
-
     xom_write(primes_xom_buf, get_primes, PAGE_SIZE);
     get_primes_xom = xom_lock(primes_xom_buf);
 
     for(i = 0; i < num_repetitions; i++) {
+        memset(primes_, 0, sizeof(primes_));
         START_TIMER;
         get_primes(primes_, sqrt);
         (void) primes_;
@@ -67,6 +67,7 @@ benchmark(primes){
     write_list(fp, times, countof(times), '\n');
 
     for(i = 0; i < num_repetitions; i++) {
+        memset(primes_, 0, sizeof(primes_));
         START_TIMER;
         get_primes_xom(primes_, sqrt);
         (void) primes_;
