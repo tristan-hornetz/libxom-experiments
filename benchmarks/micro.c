@@ -50,7 +50,10 @@ benchmark(primes){
     volatile void (*get_primes_xom)(uint32_t primes[], double (*)(double));
     struct xombuf* primes_xom_buf = xom_alloc_pages(PAGE_SIZE);
     uint64_t times[num_repetitions];
+    volatile void (*get_primes_noxom)(uint32_t primes[], double (*)(double)) =
+            mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
+    memcpy(get_primes_noxom, get_primes, PAGE_SIZE);
     xom_write(primes_xom_buf, get_primes, PAGE_SIZE);
     get_primes_xom = xom_lock(primes_xom_buf);
 
@@ -69,7 +72,7 @@ benchmark(primes){
     for(i = 0; i < num_repetitions; i++) {
         memset(primes_, 0, sizeof(primes_));
         START_TIMER;
-        get_primes(primes_, sqrt);
+        get_primes_noxom(primes_, sqrt);
         (void) primes_;
         TIME_ELAPSED(timer);
         times[i] = timer;
@@ -78,6 +81,8 @@ benchmark(primes){
     fprintf(fp, "prime_times_noxom = ");
     write_list(fp, times, countof(times), '\n');
 
+    xom_free(primes_xom_buf);
+    munmap(get_primes_noxom, PAGE_SIZE);
     return 0;
 }
 
@@ -125,7 +130,6 @@ benchmark(nop_slide) {
     xom_free(nop_slide_xom);
     return 0;
 }
-
 
 
 int main(int argc, char* argv[]){
