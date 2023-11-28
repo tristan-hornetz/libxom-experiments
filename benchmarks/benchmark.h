@@ -69,6 +69,7 @@ static int benchmark_##name_ (void) {                                    \
         return -1;                                                      \
                                                                         \
     printf(STR_PEND "Running benchmark '%s'... ", str(name_));           \
+    fflush(stdout);                                                     \
     ret = internal_benchmark_##name_(fp, str(name_), 0);                  \
     if(ret < 0)                                                         \
         printf("\r" STR_FAIL "Running benchmark '%s'... Failed! "       \
