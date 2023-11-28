@@ -63,6 +63,7 @@ static pthread_mutex_t lib_lock;
 static volatile int32_t xomfd = -1;
 static void* xom_base_addr = NULL;
 static void* (*dlopen_original)(const char *, int) = NULL;
+static void* (*dlmopen_original)(Lmid_t, const char *, int) = NULL;
 
 const static char* libs_exempt[] = {
     "/ld-linux-x86-64",
@@ -89,10 +90,26 @@ static inline void __libxom_epilogue(){
 }
 
 void *dlopen(const char *filename, int flags){
-    void* ret = dlopen_original(filename, flags);
-    migrate_skip_type(TEXT_TYPE_VDSO);
+    void* ret;
+    if(!dlopen_original)
+        return NULL;
+    ret = dlopen_original(filename, flags);
+    if(ret)
+        migrate_skip_type(TEXT_TYPE_VDSO);
     return ret;
 }
+
+
+void *dlmopen(Lmid_t lmid, const char *filename, int flags){
+    void* ret;
+    if(!dlmopen_original)
+        return NULL;
+    ret = dlmopen_original(lmid, filename, flags);
+    if(ret)
+        migrate_skip_type(TEXT_TYPE_VDSO);
+    return ret;
+}
+
 
 /**
  * Parse the /proc/<pid>/maps file to find all executable memory segments
@@ -699,6 +716,9 @@ static inline void install_dlopen_hook(void){
     dlopen_original = dlsym(RTLD_NEXT, "dlopen");
     if(dlopen_original == dlopen)
         dlopen_original = NULL;
+    dlmopen_original = dlsym(RTLD_NEXT, "dlmopen");
+    if(dlmopen_original == dlmopen)
+        dlmopen_original = NULL;
 }
 
 
