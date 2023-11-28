@@ -11,6 +11,7 @@
 #endif
 
 // Opcodes
+#define NOP 0x90
 #define RET 0xc3
 #define PROLOGUE 0x55, 0x48, 0x89, 0xe5,
 #define EPILOGUE 0xc9, 0xc3,
@@ -50,12 +51,14 @@
 
 #define DEFAULT_OUTPUT_DIRECTORY "./benchmark_results"
 
+#define countof(x) (sizeof(x)/sizeof(*(x)))
+
 #ifndef str
 #define str(x) #x
 #endif
 #define run_benchmark(name) (benchmark_##name())
 #define benchmark(name_)                                                 \
-static int internal_benchmark_##name_(const FILE *const restrict fp,     \
+static int internal_benchmark_##name_(FILE *restrict fp,                \
     const char *const restrict name, uint64_t timer_);                  \
                                                                         \
 static int benchmark_##name_ (void) {                                    \
@@ -76,13 +79,13 @@ static int benchmark_##name_ (void) {                                    \
     fclose(fp);                                                         \
     return ret;                                                         \
 }                                                                       \
-static int internal_benchmark_##name_(const FILE*const restrict fp,      \
+static int internal_benchmark_##name_(FILE *restrict fp,                \
     const char* const restrict name, uint64_t timer_)
 
 
 static inline __attribute__((always_inline)) void mfence() {asm volatile("mfence");}
-static inline __attribute__((always_inline)) void clflushp(void* p) {asm volatile("clflush (%0)" :: "r"(p));}
-static inline __attribute__((always_inline)) void clflushi(uintptr_t p) {asm volatile("clflush (%0)" :: "r"(p));}
+static inline __attribute__((always_inline)) void clflushp(void* p) {asm volatile("clflushopt (%0)" :: "r"(p));}
+static inline __attribute__((always_inline)) void clflushi(uintptr_t p) {asm volatile("clflushopt (%0)" :: "r"(p));}
 
 static inline uint64_t rdtscp_(){
     uint64_t a, d;
@@ -117,5 +120,6 @@ FILE* open_benchmark_file(const char* restrict name);
 int init_utils(void);
 int exit_utils(void);
 void flush_all(void* p, size_t size);
+void write_list(FILE*restrict fp, unsigned * data, size_t len, const char end_separator);
 
 #endif

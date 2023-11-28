@@ -42,11 +42,14 @@ static unsigned get_cache_line_size(void){
 static void get_linux_version(char* *restrict out){
     size_t len;
     FILE* fp = fopen("/proc/version", "r");
+    char* newline;
     if(!fp)
         return;
     *out = NULL;
 
     getline(out, &len, fp);
+    while((newline = strstr(*out, "\n")))
+        *newline = 0;
     fclose(fp);
 }
 
@@ -87,6 +90,7 @@ FILE* open_benchmark_file(const char* restrict name) {
         fprintf(ret, "_CPU = \"%s\"\n", cpu_ident);
         fprintf(ret, "_OS = \"%s\"\n", os_version);
 
+        fprintf(ret, "\n");
     }
 
     return ret;
@@ -118,6 +122,17 @@ int init_utils(void){
 int exit_utils(void){
     if(os_version && os_version != str_unknown)
         free(os_version);
+}
+
+void write_list(FILE*restrict fp, unsigned * data, size_t len, const char end_separator){
+    size_t i;
+
+    fprintf(fp, "[");
+    for(i = 0; i < len; i++){
+        fprintf(fp, "0x%x, ", data[i]);
+        if(!(i % 50)) fprintf(fp, "\n");
+    }
+    fprintf(fp, "]%c\n",end_separator);
 }
 
 void flush_all(void* p, size_t size){
