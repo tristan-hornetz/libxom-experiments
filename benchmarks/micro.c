@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sched.h>
+#include <math.h>
 #include "benchmark.h"
 #include "libxom.h"
 
@@ -13,6 +14,72 @@
 #define PAGE_SIZE 0x1000
 #endif
 
+#define NUM_PRIMES 1000000
+#define MAX_PRIME 15485863
+
+static uint32_t primes_[NUM_PRIMES];
+
+static inline __attribute__((always_inline)) int is_prime(const uint32_t n, double (*sqrt_)(double)){
+    uint32_t upper_bound = (uint32_t) n < 2 ? 0 : (uint32_t) sqrt_(n), i = 2;
+    while(i <= upper_bound){
+        if(!(n % i))
+            return 0;
+        i++;
+    }
+    return 1;
+}
+
+static inline __attribute__((always_inline)) uint32_t next_prime(uint32_t last, double (*sqrt_)(double)){
+    while(!is_prime(++last, sqrt_));
+    return last;
+}
+
+static __attribute__((aligned(PAGE_SIZE))) void get_primes(uint32_t primes[NUM_PRIMES], double (*sqrt_)(double)){
+    uint32_t cur = 1, n = 0;
+    while (n < NUM_PRIMES){
+        cur = next_prime(cur, sqrt_);
+        primes[n] = cur;
+        n++;
+    }
+    printf("\n%lu is the %lu-th prime!\n", cur, n);
+}
+
+benchmark(primes){
+    const static unsigned num_repetitions = 10;
+    unsigned i;
+    uint64_t timer;
+    void (*get_primes_xom)(uint32_t primes[], double (*)(double));
+    struct xombuf* primes_xom_buf = xom_alloc_pages(PAGE_SIZE);
+    unsigned times[num_repetitions];
+
+
+    xom_write(primes_xom_buf, get_primes, PAGE_SIZE);
+    get_primes_xom = xom_lock(primes_xom_buf);
+
+    for(i = 0; i < num_repetitions; i++) {
+        START_TIMER;
+        get_primes(primes_, sqrt);
+        (void) primes_;
+        TIME_ELAPSED(timer);
+        times[i] = timer;
+    }
+
+    fprintf(fp, "prime_times_noxom = ");
+    write_list(fp, times, countof(times), '\n');
+
+    for(i = 0; i < num_repetitions; i++) {
+        START_TIMER;
+        get_primes_xom(primes_, sqrt);
+        (void) primes_;
+        TIME_ELAPSED(timer);
+        times[i] = timer;
+    }
+
+    fprintf(fp, "prime_times_xom = ");
+    write_list(fp, times, countof(times), '\n');
+
+    return 0;
+}
 
 benchmark(nop_slide) {
     uint64_t timer;
@@ -72,6 +139,7 @@ int main(int argc, char* argv[]){
         return 1;
 
     run_benchmark(nop_slide);
+    run_benchmark(primes);
 
     exit_utils();
     return 0;
