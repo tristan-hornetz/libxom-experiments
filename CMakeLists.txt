@@ -10,8 +10,8 @@ set(CMAKE_C_FLAGS_DEBUG "-O0 -DDEBUG_FAULT_HANDLER")
 
 add_subdirectory("modxom")
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libxom)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/modxom)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libxom)
 add_library(xom SHARED 
     "libxom/libxom.c"
 )
@@ -25,6 +25,7 @@ target_link_libraries(xom-static PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
 target_compile_options(xom-static PUBLIC "-mrdrnd")
 
 add_subdirectory(demos)
+add_subdirectory(benchmarks)
 
 install(TARGETS xom DESTINATION /usr/lib)
 install(FILES libxom/libxom.h DESTINATION include)
