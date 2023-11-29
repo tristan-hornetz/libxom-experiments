@@ -592,6 +592,14 @@ static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len
         return xom_write_into_subpages(f, user_mem, len, offset);
     if(copy_from_user(&cmd, user_mem, sizeof(cmd)))
         return -EFAULT;
+
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] CMD: cmd: %s, base_addr: 0x%lx, num_pages: %u\n", 
+        cmd.cmd == MODXOM_CMD_FREE ? "MODXOM_CMD_FREE" : 
+        cmd.cmd == MODXOM_CMD_LOCK ? "MODXOM_CMD_LOCK" : 
+        cmd.cmd == MODXOM_CMD_INIT_SUBPAGES ? "MODXOM_CMD_INIT_SUBPAGES" : "<unknown>", 
+        cmd.base_addr, cmd.num_pages);
+    #endif
     
     mutex_lock(&file_lock);
     switch(cmd.cmd){
