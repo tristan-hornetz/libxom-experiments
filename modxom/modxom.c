@@ -20,6 +20,8 @@
 #include <asm/pgtable_64.h>
 #include "modxom.h"
 
+// #define MODXOM_DEBUG 1
+
 #define MMUEXT_MARK_XOM                         21
 #define MMUEXT_UNMARK_XOM                       22
 #define MMUEXT_CREATE_XOM_SPAGES                23
@@ -167,6 +169,10 @@ static pxom_process_entry get_process_entry(void) {
         curr_entry = (pxom_process_entry)curr_entry->lhead.next;
     }
 
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] Could not get process entry for PID: %d\n", current->pid);
+    #endif
+
     return NULL;
 }
 
@@ -224,9 +230,14 @@ static int lock_pages(pmodxom_cmd cmd){
     pxom_process_entry curr_entry;
     pxom_mapping curr_mapping;
 
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] lock_pages(base_addr: 0x%lx, num_pages: 0x%u), PID: %d\n", 
+        cmd->base_addr, cmd->num_pages, current->pid);
+    #endif
+
     curr_entry = get_process_entry();
     if(!curr_entry)
-        return -EINVAL;
+        goto fail;
     
     curr_mapping = (pxom_mapping) curr_entry->mappings.next;
     while ((void *)curr_mapping != &(curr_entry->mappings)){
@@ -237,15 +248,19 @@ static int lock_pages(pmodxom_cmd cmd){
         }
 
         if(curr_mapping->subpage_level)
-            return -EINVAL;
+            goto fail;
                
         if(cmd->base_addr + cmd->num_pages * PAGE_SIZE > curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE) 
-            return -EINVAL;
+            goto fail;
         
         page_index = (cmd->base_addr - curr_mapping->uaddr) / PAGE_SIZE;
         
         return xom_invoke_xen(curr_mapping, page_index, cmd->num_pages, MMUEXT_MARK_XOM);
     }
+fail:
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] lock_pages - Failed!, PID: %d\n", current->pid);
+    #endif
     return -EINVAL;
 }
 
@@ -376,10 +391,14 @@ static int xom_subpage_write_xen(pmodxom_cmd cmd){
         op.cmd = MMUEXT_WRITE_XOM_SPAGES;
         op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr))) >> PAGE_SHIFT;
         op.arg2.src_mfn = virt_to_phys(modxom_src_operand_page) >> PAGE_SHIFT;
+        #ifdef MODXOM_DEBUG
         printk(KERN_INFO "[MODXOM] Invoking hypervisor with dest_mfn 0x%lx and src_mfn 0x%lx\n", op.arg1.mfn, op.arg2.src_mfn);
+        #endif
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
+            #ifdef MODXOM_DEBUG
             printk(KERN_INFO "[MODXOM] Failed - Status 0x%x\n", status);
+            #endif
             return -EINVAL;
         }
         return 0;
@@ -469,6 +488,11 @@ static int xom_mmap(struct file *f, struct vm_area_struct *vma)
     pxom_process_entry curr_entry;
     pxom_mapping new_mapping;
 
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] xom_mmap(0x%lx -> 0x%lx, %lu pages), PID: %d\n", 
+        vma->vm_start, vma->vm_end, (vma->vm_end - vma->vm_start) / PAGE_SIZE, current->pid);
+    #endif
+
     if(!xen_hvm_domain())
         return -ENODEV;
 
@@ -483,6 +507,11 @@ static int xom_mmap(struct file *f, struct vm_area_struct *vma)
         list_add(&(new_mapping->lhead), &(curr_entry->mappings));
 
     mutex_unlock(&file_lock);
+
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] xom_mmap returns %d\n", status);
+    #endif
+
     return status;
 }
 
@@ -551,6 +580,12 @@ static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len
 {
     ssize_t ret = -EINVAL;
     modxom_cmd cmd;
+
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] xom_write(user_mem: 0x%lx, len: 0x%lx, offset: %llx), PID: %d\n", 
+        (unsigned long) user_mem, len, *offset, current->pid);
+    #endif
+
     if(len < sizeof(modxom_cmd))
         return -EINVAL;
     if(len > sizeof(modxom_cmd))
@@ -576,7 +611,9 @@ static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len
     }
 
     mutex_unlock(&file_lock);
-
+    #ifdef MODXOM_DEBUG
+    printk(KERN_INFO "[MODXOM] xom_write returns %li\n", ret);
+    #endif
     return ret;
 }
 
