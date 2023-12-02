@@ -367,6 +367,31 @@ fail:
     return NULL;
 }
 
+static int manage_mapping_intersection(struct vm_area_struct* vma, pxom_process_entry curr_entry){
+    int status;
+    pxom_mapping curr_mapping;
+
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(vma->vm_end > curr_mapping->uaddr || 
+                vma->vm_start >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+        // The new VMA must fully contain the old mapping, we cannot proceed otherwise
+        if(curr_mapping->uaddr < vma->vm_start || 
+            curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE > vma->vm_end)
+            return 1;
+        status = release_mapping(curr_mapping);
+        if(status)
+            return status;
+        list_del(&(curr_mapping->lhead));
+        kfree(curr_mapping);
+        break;
+    }
+    return 0;
+}
+
 static int xom_subpage_write_xen(pmodxom_cmd cmd){
     int status;
     struct mmuext_op op;
@@ -482,9 +507,8 @@ static int xom_release(struct inode *, struct file *)
     return status;
 }
 
-static int xom_mmap(struct file *f, struct vm_area_struct *vma)
-{
-    int status = 0;
+static int xom_mmap(struct file *f, struct vm_area_struct *vma) {
+    int status;
     pxom_process_entry curr_entry;
     pxom_mapping new_mapping;
 
@@ -499,6 +523,14 @@ static int xom_mmap(struct file *f, struct vm_area_struct *vma)
     mutex_lock(&file_lock);
 
     curr_entry = get_process_entry();
+
+    if(!curr_entry)
+        return -EINVAL;
+
+    status = manage_mapping_intersection(vma, curr_entry);
+    if(status < 0)
+        return status;
+
     new_mapping = get_new_mapping(vma, curr_entry);
 
     if (!new_mapping)
