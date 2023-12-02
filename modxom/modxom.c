@@ -373,7 +373,7 @@ static int manage_mapping_intersection(struct vm_area_struct* vma, pxom_process_
 
     curr_mapping = (pxom_mapping) curr_entry->mappings.next;
     while ((void *)curr_mapping != &(curr_entry->mappings)){
-        if(vma->vm_end > curr_mapping->uaddr || 
+        if(vma->vm_end < curr_mapping->uaddr || 
                 vma->vm_start >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
             curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
             continue;
