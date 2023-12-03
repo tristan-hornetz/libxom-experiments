@@ -18,6 +18,10 @@
 #define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))
 #endif
 
+#define XOM_MODE_UNSUPPORTED    0
+#define XOM_MODE_PKU            1
+#define XOM_MODE_SLAT           2
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -47,9 +51,9 @@ struct xom_subpages;
 struct xombuf* xom_alloc_pages(size_t size);
 
 /**
- * @returns 1 if XOM is supported in the current environment, 0 otherwise
+ * @returns The current XOM mode. 0 means that XOM is not supported in any capacity
  */
-int is_xom_supported();
+const int get_xom_mode();
 
 /** 
  * Get the size of a XOM buffer

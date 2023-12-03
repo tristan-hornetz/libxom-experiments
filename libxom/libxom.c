@@ -14,6 +14,7 @@
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
+#include <cpuid.h>
 #include "libxom.h"
 #include "modxom.h"
 
@@ -60,7 +61,8 @@ struct {
 
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static volatile int32_t xomfd = -1;
+static int32_t xomfd = -1;
+static unsigned int xom_mode = XOM_MODE_UNSUPPORTED;
 static void* xom_base_addr = NULL;
 static void* (*dlopen_original)(const char *, int) = NULL;
 static void* (*dlmopen_original)(Lmid_t, const char *, int) = NULL;
@@ -119,7 +121,7 @@ void *dlmopen(Lmid_t lmid, const char *filename, int flags){
 */
 static text_region* explore_text_regions(){
     const unsigned long vdso_base = getauxval(AT_SYSINFO_EHDR);
-    char mpath[64] = {0, };
+    const static char mpath[] = "/proc/self/maps";
     char perms[3] = {0, };
     char *line = NULL;
     unsigned i;
@@ -130,7 +132,6 @@ static text_region* explore_text_regions(){
     text_region* regions;
 
 
-    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
     maps = fopen(mpath, "r");
     if(!maps)
         return NULL;
@@ -265,6 +266,10 @@ static int migrate_text_section(text_region* space){
     int (*remap_function)(text_region*, char*, int32_t);
     modxom_cmd cmd;
 
+    // If modxom is unavailable, use PKU
+    if(xomfd < 0)
+        return mprotect(space->text_base, space->text_end - space->text_base, PROT_EXEC);
+
     // printf("Remapping %p - %p, type %u - %u\n", space->text_base, space->text_end, space->type, space->jump_into_backup);
 
     // Mmap code backup
@@ -308,8 +313,10 @@ static int migrate_skip_type(unsigned int skip_type){
     unsigned int i = 0;
     text_region* spaces;
 
-    if(xomfd < 0)
+    if(!xom_mode){
+        errno = EINVAL;
         return -1;
+    }
 
     spaces = explore_text_regions();
     if(!spaces)
@@ -343,7 +350,7 @@ static p_xombuf xomalloc_page_internal(size_t size){
     ssize_t size_left = size;
     p_xombuf ret;
     
-    if(!size){
+    if(!size || !xom_mode){
         errno = EINVAL;
         return NULL;
     }
@@ -357,7 +364,8 @@ static p_xombuf xomalloc_page_internal(size_t size){
 
     ret->address = NULL;
     while(size_left > 0){
-        current_address = mmap(current_address, SIZE_CEIL(min(ALLOC_CHUNK_SIZE, size_left)), PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
+        current_address = mmap(current_address, SIZE_CEIL(min(ALLOC_CHUNK_SIZE, size_left)),
+                               PROT_READ | PROT_WRITE, MAP_PRIVATE |  (xomfd < 0 ? MAP_ANONYMOUS : 0), xomfd, 0);
         if(!current_address)
             goto fail;
         if(!ret->address)
@@ -408,6 +416,13 @@ static void* xom_lock_internal(struct xombuf* buf){
     if(buf->locked)
         return buf->address;
 
+    if(xomfd < 0){
+        if(mprotect(buf->address, SIZE_CEIL(buf->allocated_size), PROT_EXEC) < 0)
+            return NULL;
+        buf->locked = 1;
+        return buf->address;
+    }
+
     size_left = buf->allocated_size;
     while(size_left > 0){
         cmd = (modxom_cmd) {
@@ -432,6 +447,12 @@ static void xom_free_internal(struct xombuf* buf){
     
     if(!buf)
         return;
+
+    if(xomfd < 0){
+        munmap(buf->address, SIZE_CEIL(buf->allocated_size));
+        free(buf);
+        return;
+    }
     
     size_left = buf->allocated_size;
     while(size_left > 0){
@@ -454,7 +475,7 @@ static struct xom_subpages* xom_alloc_subpages_internal(size_t size){
     p_xom_subpages ret = NULL;
     p_xombuf xombuf;
 
-    if(size > ALLOC_CHUNK_SIZE)
+    if(size > ALLOC_CHUNK_SIZE || xomfd < 0)
         return NULL;
 
     xombuf = xomalloc_page_internal(size);
@@ -533,7 +554,7 @@ static void* write_into_subpages(struct xom_subpages* dest, size_t subpages_requ
 static void* xom_fill_and_lock_subpages_internal(struct xom_subpages* dest, size_t size, const void *const src){
     size_t subpages_required = (size / SUBPAGE_SIZE) + (size % SUBPAGE_SIZE ? 1 : 0);
     uint32_t mask;
-    unsigned int base_page, base_subpage, i;
+    unsigned int base_page, base_subpage;
 
     if(!size || subpages_required > dest->num_subpages || subpages_required > MAX_SUBPAGES_PER_CMD){
         errno = EINVAL;
@@ -585,8 +606,8 @@ static int xom_free_subpages_internal(struct xom_subpages* subpages, void* base_
     return 0;
 }
 
-static inline int is_xom_supported_internal(){
-    return xomfd >= 0 ? 1 : 0;
+static inline int get_xom_mode_internal(){
+    return (int) xom_mode;
 }
 
 struct xombuf* xom_alloc_pages(size_t size){
@@ -639,8 +660,8 @@ void xom_free_all_subpages(struct xom_subpages* subpages){
     __libxom_epilogue();   
 }
 
-int is_xom_supported(){
-    wrap_call(int, is_xom_supported_internal());
+const int get_xom_mode(){
+    wrap_call(int, get_xom_mode_internal());
 }
 
 
@@ -721,9 +742,16 @@ static inline void install_dlopen_hook(void){
         dlmopen_original = NULL;
 }
 
+static uint8_t is_pku_supported(void){
+    unsigned long a, b, c, d;
+
+    __cpuid_count(7, 0, a, b, c, d);
+
+    return (uint8_t) (c >> 3) & 1;
+}
 
 __attribute__((constructor))
-static void initialize_libxom() {
+void initialize_libxom(void) {
     char** envp = __environ;
     uintptr_t rval = 0;
 
@@ -735,6 +763,14 @@ static void initialize_libxom() {
     pthread_mutex_lock(&lib_lock);
 
     xomfd = open("/proc/xom", O_RDWR);
+    if(xomfd >= 0) {
+        xom_mode = XOM_MODE_SLAT;
+    } else if(is_pku_supported()) {
+        xom_mode = XOM_MODE_PKU;
+    } else {
+        pthread_mutex_unlock(&lib_lock);
+        return;
+    }
 
     while(*envp) {
         if(strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)){

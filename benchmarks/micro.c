@@ -133,11 +133,16 @@ benchmark(nop_slide) {
 
 
 int main(int argc, char* argv[]){
+    int xom_mode = get_xom_mode();
     if(argc > 1)
         output_directory = argv[1];
 
-    if(!is_xom_supported())
-        fprintf(stderr, STR_FAIL "XOM is not supported! The benchmarks will likely cause a segmentation fault!\n");
+    if(!get_xom_mode()){
+        fprintf(stderr, STR_FAIL "XOM is not supported! Quit...\n");
+        return 1;
+    }
+    if(xom_mode == XOM_MODE_PKU)
+        puts(STR_WARN "SLAT XOM is not supported (did you load modxom?). Using insecure PKU XOM instead ...");
 
     if(init_utils() < 0)
         return 1;
