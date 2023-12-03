@@ -204,7 +204,7 @@ static int write_output(ssize_t size, char* restrict output){
     return status;
 }
 
-static key_prime_fun* allocate_key_fun_noxom(){
+static key_prime_fun* allocate_key_fun_noslat(){
     key_prime_fun * ret;
 
     ret = (key_prime_fun*) mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -213,7 +213,7 @@ static key_prime_fun* allocate_key_fun_noxom(){
 
     memcpy(ret, empty_key, sizeof(*empty_key));
     init_counter_mode_key(ret, &key);
-    mprotect(ret, getpagesize(), PROT_EXEC | PROT_READ);
+    mprotect(ret, getpagesize(), PROT_EXEC);
 
     return ret;
 
@@ -222,9 +222,14 @@ static key_prime_fun* allocate_key_fun_noxom(){
 static key_prime_fun* allocate_key_fun(){
 
     key_prime_fun prime_fun, *ret;
-    if(!is_xom_supported()){
-        fprintf(stderr, STR_WARN "XOM is not supported on this system! Resorting to PKU-based XOM, if available\n");
-        return allocate_key_fun_noxom();
+    int xom_mode = get_xom_mode();
+    if(!xom_mode){
+        fprintf(stderr, STR_ERR "XOM is not supported on this system!\n");
+        return NULL;
+    }
+    if(xom_mode == XOM_MODE_PKU){
+        printf(STR_WARN "SLAT-base XOM is not supported on this system! Resorting to PKU, which is unsafe ...\n");
+        return allocate_key_fun_noslat();
     }
 
     memcpy(&prime_fun, empty_key, sizeof(*empty_key));
