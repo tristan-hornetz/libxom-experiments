@@ -10,7 +10,14 @@
 #include <immintrin.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
+#include <linux/audit.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <sys/ptrace.h>
 #include <cpuid.h>
 #include "libxom.h"
 #include "modxom.h"
@@ -31,6 +38,7 @@
 
 #define SIZE_CEIL(S)            ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 #define min(x, y)               ((x) < (y) ? (x) : (y))
+#define countof(X)              (sizeof(X) / sizeof(*(X)))
 
 extern char **__environ;
 
@@ -595,6 +603,41 @@ static inline int get_xom_mode_internal(){
     return (int) xom_mode;
 }
 
+static int install_seccomp_filter() {
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, arch))),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 0, 6),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, nr))),
+        BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, 0x40000000 - 1, 4, 0),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_ptrace, 2, 3),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_rt_sigaction, 1, 2),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_prctl, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | ( EPERM & SECCOMP_RET_DATA)),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+    };
+
+    struct sock_fprog prog = {
+       .len = countof(filter),
+       .filter = filter,
+    };
+    
+    return syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &prog);
+}
+
+static int xom_reduce_privileges_internal(void) {
+    // Detect a running debugger (not entirely foolproof)
+    if (ptrace(PTRACE_TRACEME, 0) < 0)
+        return -1;
+    // Never increase our privileges again
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
+        return -1;
+    // We do not want to be dumped or ptraced
+    if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0))
+        return -1;
+    return install_seccomp_filter();
+}
+
 struct xombuf* xom_alloc_pages(size_t size){
     wrap_call(struct xombuf*, xomalloc_page_internal(size));
 }
@@ -664,6 +707,10 @@ static uint8_t is_pku_supported(void){
     __cpuid_count(7, 0, a, b, c, d);
 
     return (uint8_t) (c >> 3) & 1;
+}
+
+int xom_reduce_privileges(void) {
+    wrap_call(int, xom_reduce_privileges_internal())
 }
 
 __attribute__((constructor))

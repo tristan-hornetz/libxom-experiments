@@ -155,6 +155,8 @@ int xom_free_subpages(struct xom_subpages* subpages, void* base_address);
 */
 void xom_free_all_subpages(struct xom_subpages* subpages);
 
+int xom_reduce_privileges(void);
+
 #ifdef __cplusplus
 }
 #endif

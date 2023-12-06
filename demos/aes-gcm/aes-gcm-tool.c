@@ -220,7 +220,6 @@ static key_prime_fun* allocate_key_fun_noslat(){
 }
 
 static key_prime_fun* allocate_key_fun(){
-
     key_prime_fun prime_fun, *ret;
     int xom_mode = get_xom_mode();
     if(!xom_mode){
@@ -246,6 +245,9 @@ int main(int argc, char *argv[]) {
     ssize_t input_size;
     aes_gcm_context context;
     key_prime_fun* key_fun;
+
+    if (xom_reduce_privileges())
+        return -1;
 
     status = parse_args(argc, argv);
     if (status < 0)
