@@ -22,6 +22,9 @@
 #define XOM_MODE_PKU            1
 #define XOM_MODE_SLAT           2
 
+#define CLEAR_REG_MAGIC_HI 0x436c6561724d6550 
+#define CLEAR_REG_MAGIC_LO 0x6c65617365212100
+
 #ifdef __cplusplus
 extern "C" {
 #endif
