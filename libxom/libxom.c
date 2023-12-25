@@ -6,6 +6,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
+#include <signal.h>
 #include <dlfcn.h>
 #include <immintrin.h>
 #include <sys/auxv.h>
@@ -24,6 +26,7 @@
 
 #define LIBXOM_ENVVAR           "LIBXOM_LOCK"
 #define LIBXOM_ENVVAR_LOCK_ALL  "all"
+#define LIBXOM_ENVVAR_LOCK_LAX  "lax"
 #define LIBXOM_ENVVAR_LOCK_LIBS "libs"
 
 #define TEXT_TYPE_EXECUTABLE    1
@@ -70,6 +73,12 @@ static unsigned int xom_mode = XOM_MODE_UNSUPPORTED;
 static void* xom_base_addr = NULL;
 static void* (*dlopen_original)(const char *, int) = NULL;
 static void* (*dlmopen_original)(Lmid_t, const char *, int) = NULL;
+
+const static char* libs_exempt[] = {
+    "/ld-linux-x86-64",
+    "/libstdc++.so",
+    "/libc.so"
+};
 
 #define wrap_call(T, F) {           \
     T r;                            \
@@ -120,7 +129,8 @@ static text_region* explore_text_regions(){
     const static char mpath[] = "/proc/self/maps";
     char perms[3] = {0, };
     char *line = NULL;
-    int status, is_libc;
+    unsigned i;
+    int status, is_exempt;
     size_t start, end, last = 0, len = 0;
     ssize_t count = 0;
     FILE* maps;
@@ -150,7 +160,9 @@ static text_region* explore_text_regions(){
     count = 0;
     while (getline(&line, &len, maps) > 0) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
-        is_libc = strstr(line, "libc.so") ? 1 : 0;
+        is_exempt = 0;
+        for(i = 0; i < countof(libs_exempt) && !is_exempt; i++)
+            is_exempt |= strstr(line, libs_exempt[i]) ? 1 : 0;
         free(line);
         line = NULL;
         if(status != 5)
@@ -163,7 +175,7 @@ static text_region* explore_text_regions(){
 
         if (!count)
             regions[count].type = TEXT_TYPE_EXECUTABLE;
-        else if (is_libc)
+        else if (is_exempt)
             regions[count].type = TEXT_TYPE_LIBC;
         else if (regions[count].text_base == (char*) vdso_base)
             regions[count].type = TEXT_TYPE_VDSO;
@@ -713,6 +725,57 @@ int xom_reduce_privileges(void) {
     wrap_call(int, xom_reduce_privileges_internal())
 }
 
+
+void log_process_start(){
+    char file[32] = {0, };
+    char buf[PATH_MAX] = {0, };
+    FILE *fp;
+    sprintf(file, "/proc/self/cmdline");
+    fp = fopen(file, "r");
+    if(!fp)
+        return;
+    fgets(buf, 64, fp);
+    fclose(fp);
+    fp = fopen("/tmp/libxom.log", "a");
+    if(!fp) 
+        return;
+    fprintf(fp, "%s [%lu]\n", buf, getpid());
+    fclose(fp);
+}
+
+static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
+    char mpath[64] = {0, };
+    char perms[3] = {0, };
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t count = 0;
+    FILE* maps;
+
+    printf("Segfault at %p!\n", (void*) siginfo->si_addr);
+
+    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
+    maps = fopen(mpath, "r");
+    if(!maps)
+        return;
+    
+    // Get amount of executable memory regions
+    while (getline(&line, &len, maps) != -1) {
+        printf("%s", line);
+        free(line);
+        line = NULL;
+    }
+    fclose(maps);
+    exit(1);
+}
+
+
+static void setup_debug_fault_handler(){
+    struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = (void*) debug_fault_handler;
+    sigaction(SIGSEGV, &sa, NULL);
+}
+
 __attribute__((constructor))
 void initialize_libxom(void) {
     char** envp = __environ;
@@ -746,7 +809,6 @@ void initialize_libxom(void) {
         }
         envp++;
     }
-
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));

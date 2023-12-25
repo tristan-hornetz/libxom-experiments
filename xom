@@ -2,5 +2,6 @@
 
 export LD_PRELOAD="libxom.so"
 export LIBXOM_LOCK=all
+export LIBXOM_LOG_STARTUP=true
 
 "$@"

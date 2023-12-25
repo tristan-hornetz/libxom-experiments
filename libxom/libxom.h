@@ -160,6 +160,12 @@ void xom_free_all_subpages(struct xom_subpages* subpages);
 
 int xom_reduce_privileges(void);
 
+void reg_clear_area_begin(void);
+
+void reg_clear_area_leave(void);
+
+int32_t check_reg_clear_magic(void);
+
 #ifdef __cplusplus
 }
 #endif

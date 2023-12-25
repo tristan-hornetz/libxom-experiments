@@ -7,21 +7,27 @@ find_package(Threads REQUIRED)
 
 set(CMAKE_C_FLAGS_RELEASE "-O3")
 
+# set(CMAKE_VERBOSE_MAKEFILE TRUE)
+
 add_subdirectory("modxom")
+
+add_link_options("-znoexecstack")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libxom)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/modxom)
 add_library(xom SHARED 
     "libxom/libxom.c"
+    "libxom/reg_clear.s"
 )
 target_link_libraries(xom PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-target_compile_options(xom PUBLIC "-fPIC;-mrdrnd")
+target_compile_options(xom PUBLIC "-fPIC;-mrdrnd;-mmmx;-msse2")
 
 add_library(xom-static STATIC
     "libxom/libxom.c"
+    "libxom/reg_clear.s"
 )
 target_link_libraries(xom-static PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
-target_compile_options(xom-static PUBLIC "-mrdrnd")
+target_compile_options(xom-static PUBLIC "-mrdrnd;-mmmx;-msse2")
 
 add_subdirectory(demos)
 
