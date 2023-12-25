@@ -15,7 +15,6 @@
 
 #define block_align(s) ((s) + (((s) % GCM_BLOCK_BYTES) ? (GCM_BLOCK_BYTES - (s) % GCM_BLOCK_BYTES) : 0))
 
-
 _Static_assert(sizeof(aes_uint128) == sizeof(__m128i), "Size of aes_uint128 does not align!");
 
 static struct xom_subpages* subpages = NULL;
@@ -37,10 +36,8 @@ const static struct option long_options[] = {
 static int parse_u128(const char* restrict in, aes_uint128 *restrict out){
     int i;
     size_t slen;
-    char padded_input[2 * sizeof(aes_uint128) + 1], b1[17];
+    char padded_input[2 * sizeof(aes_uint128) + 1] = {0}, b1[17] = {0};
 
-    memset(padded_input, 0, sizeof(padded_input));
-    memset(b1, 0, sizeof(b1));
     memset(out, 0, sizeof(*out));
 
     slen = strlen(in);
@@ -62,7 +59,7 @@ static int parse_u128(const char* restrict in, aes_uint128 *restrict out){
     return 0;
 }
 
-static int parse_args(int argc, char *argv[]) {
+static int parse_args(const int argc, char *argv[]) {
     int c, option_index, status = 0;
 
     while (1) {
@@ -183,13 +180,12 @@ static ssize_t read_input_file(char** input){
         memset(&((*input)[file_size]), 0, block_align(file_size) - file_size);
 
 exit:
-    if(fp)
-        fclose(fp);
+    fclose(fp);
 
     return status;
 }
 
-static int write_output(ssize_t size, char* restrict output){
+static int write_output(const ssize_t size, const char* restrict output){
     int status = 0;
     FILE* fp;
     size_t bytes_written;
@@ -204,48 +200,48 @@ static int write_output(ssize_t size, char* restrict output){
     return status;
 }
 
-static key_prime_fun* allocate_key_fun_noslat(){
-    key_prime_fun * ret;
+static aes_fun_code* allocate_key_fun_noslat(){
+    aes_fun_code*  ret;
 
-    ret = (key_prime_fun*) mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    ret = (aes_fun_code*) mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(!ret || !~(uintptr_t)ret)
         return NULL;
 
-    memcpy(ret, empty_key, sizeof(*empty_key));
-    init_counter_mode_key(ret, &key);
-    mprotect(ret, getpagesize(), PROT_EXEC);
+    init_counter_mode_function(ret, &key);
+    mprotect(ret, getpagesize(), PROT_EXEC | PROT_READ);
 
     return ret;
 
 }
 
-static key_prime_fun* allocate_key_fun(){
+static aes_fun_code* allocate_key_fun(){
+    aes_fun_code fun_buf, *ret;
+    const int xom_mode = get_xom_mode();
 
-    key_prime_fun prime_fun, *ret;
-    int xom_mode = get_xom_mode();
     if(!xom_mode){
         fprintf(stderr, STR_ERR "XOM is not supported on this system!\n");
         return NULL;
     }
+
     if(xom_mode == XOM_MODE_PKU){
-        printf(STR_WARN "SLAT-base XOM is not supported on this system! Resorting to PKU, which is unsafe ...\n");
+        printf(STR_WARN "SLAT-based XOM is not supported on this system! Resorting to PKU, which is insecure...\n");
         return allocate_key_fun_noslat();
     }
 
-    memcpy(&prime_fun, empty_key, sizeof(*empty_key));
-    init_counter_mode_key(&prime_fun, &key);
+    init_counter_mode_function(&fun_buf, &key);
     subpages = xom_alloc_subpages(getpagesize());
-    ret = (key_prime_fun*) xom_fill_and_lock_subpages(subpages, sizeof(prime_fun), &prime_fun);
-    memset(&prime_fun, 0, sizeof (prime_fun));
+    ret = (aes_fun_code*) xom_fill_and_lock_subpages(subpages, sizeof(fun_buf), &fun_buf);
+    memset(&fun_buf, 0, sizeof (fun_buf));
+
     return ret;
 }
 
 int main(int argc, char *argv[]) {
-    int status = -1;
+    int status;
     char* input = NULL, *output = NULL;
     ssize_t input_size;
     aes_gcm_context context;
-    key_prime_fun* key_fun;
+    aes_fun_code* key_fun;
 
     status = parse_args(argc, argv);
     if (status < 0)
@@ -268,7 +264,7 @@ int main(int argc, char *argv[]) {
     }
 
     context = (aes_gcm_context) {
-        .key = key_fun,
+        .gctr = (gctr_fun) key_fun,
         .plaintext = (unsigned char *restrict) (enc ? input : output),
         .ciphertext = (unsigned char *restrict) (enc ? output : input),
         .num_blocks = block_align(input_size) / GCM_BLOCK_BYTES,
@@ -277,7 +273,6 @@ int main(int argc, char *argv[]) {
         .tag = (char *restrict) &tag,
         .iv = (char *restrict) &iv,
         .iv_len = sizeof (iv),
-        .key_type = AES_KEY_TYPE_ENCRYPT_COUNTER
     };
 
     if(enc)

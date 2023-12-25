@@ -22,6 +22,9 @@
 #define XOM_MODE_PKU            1
 #define XOM_MODE_SLAT           2
 
+#define CLEAR_REG_MAGIC_HI 0x436c6561724d6550 
+#define CLEAR_REG_MAGIC_LO 0x6c65617365212100
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -156,6 +159,14 @@ int xom_free_subpages(struct xom_subpages* subpages, void* base_address);
  * @param subpages A subpage XOM buffer previously allocated with xom_alloc_subpages
 */
 void xom_free_all_subpages(struct xom_subpages* subpages);
+
+int xom_reduce_privileges(void);
+
+void reg_clear_area_begin(void);
+
+void reg_clear_area_leave(void);
+
+int32_t check_reg_clear_magic(void);
 
 #ifdef __cplusplus
 }

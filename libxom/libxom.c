@@ -13,13 +13,21 @@
 #include <ucontext.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
+#include <sys/prctl.h>
+#include <stddef.h>
+#include <stdlib.h>
 #include <sys/syscall.h>
+#include <linux/audit.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+#include <sys/ptrace.h>
 #include <cpuid.h>
 #include "libxom.h"
 #include "modxom.h"
 
 #define LIBXOM_ENVVAR           "LIBXOM_LOCK"
 #define LIBXOM_ENVVAR_LOCK_ALL  "all"
+#define LIBXOM_ENVVAR_LOCK_LAX  "lax"
 #define LIBXOM_ENVVAR_LOCK_LIBS "libs"
 
 #define TEXT_TYPE_EXECUTABLE    1
@@ -34,7 +42,7 @@
 
 #define SIZE_CEIL(S)            ((((S) >> PAGE_SHIFT) + ((S) & (PAGE_SIZE - 1) ? 1 : 0) ) << PAGE_SHIFT)
 #define min(x, y)               ((x) < (y) ? (x) : (y))
-#define countof(x)              (sizeof(x)/sizeof(*(x)))
+#define countof(X)              (sizeof(X) / sizeof(*(X)))
 
 extern char **__environ;
 
@@ -125,7 +133,7 @@ static text_region* explore_text_regions(){
     char perms[3] = {0, };
     char *line = NULL;
     unsigned i;
-    int status, is_libc;
+    int status, is_exempt;
     size_t start, end, last = 0, len = 0;
     ssize_t count = 0;
     FILE* maps;
@@ -155,9 +163,9 @@ static text_region* explore_text_regions(){
     count = 0;
     while (getline(&line, &len, maps) > 0) {
         status = sscanf(line, "%lx-%lx %c%c%c", &start, &end, &perms[0], &perms[1], &perms[2]);
-        is_libc = 0;
-        for(i = 0; i < countof(libs_exempt) && !is_libc; i++)
-            is_libc |= strstr(line, libs_exempt[i]) ? 1 : 0;
+        is_exempt = 0;
+        for(i = 0; i < countof(libs_exempt) && !is_exempt; i++)
+            is_exempt |= strstr(line, libs_exempt[i]) ? 1 : 0;
         free(line);
         line = NULL;
         if(status != 5)
@@ -170,7 +178,7 @@ static text_region* explore_text_regions(){
 
         if (!count)
             regions[count].type = TEXT_TYPE_EXECUTABLE;
-        else if (is_libc)
+        else if (is_exempt)
             regions[count].type = TEXT_TYPE_LIBC;
         else if (regions[count].text_base == (char*) vdso_base)
             regions[count].type = TEXT_TYPE_VDSO;
@@ -610,6 +618,41 @@ static inline int get_xom_mode_internal(){
     return (int) xom_mode;
 }
 
+static int install_seccomp_filter() {
+    struct sock_filter filter[] = {
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, arch))),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_X86_64, 0, 6),
+        BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, nr))),
+        BPF_JUMP(BPF_JMP | BPF_JGT | BPF_K, 0x40000000 - 1, 4, 0),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_ptrace, 2, 3),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_rt_sigaction, 1, 2),
+        BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, SYS_prctl, 0, 1),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | ( EPERM & SECCOMP_RET_DATA)),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW),
+        BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_KILL_PROCESS),
+    };
+
+    struct sock_fprog prog = {
+       .len = countof(filter),
+       .filter = filter,
+    };
+    
+    return syscall(SYS_seccomp, SECCOMP_SET_MODE_FILTER, 0, &prog);
+}
+
+static int xom_reduce_privileges_internal(void) {
+    // Detect a running debugger (not entirely foolproof)
+    if (ptrace(PTRACE_TRACEME, 0) < 0)
+        return -1;
+    // Never increase our privileges again
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
+        return -1;
+    // We do not want to be dumped or ptraced
+    if (prctl(PR_SET_DUMPABLE, 0, 0, 0, 0))
+        return -1;
+    return install_seccomp_filter();
+}
+
 struct xombuf* xom_alloc_pages(size_t size){
     wrap_call(struct xombuf*, xomalloc_page_internal(size));
 }
@@ -748,6 +791,61 @@ static uint8_t is_pku_supported(void){
     __cpuid_count(7, 0, a, b, c, d);
 
     return (uint8_t) (c >> 3) & 1;
+}
+
+int xom_reduce_privileges(void) {
+    wrap_call(int, xom_reduce_privileges_internal())
+}
+
+
+void log_process_start(){
+    char file[32] = {0, };
+    char buf[PATH_MAX] = {0, };
+    FILE *fp;
+    sprintf(file, "/proc/self/cmdline");
+    fp = fopen(file, "r");
+    if(!fp)
+        return;
+    fgets(buf, 64, fp);
+    fclose(fp);
+    fp = fopen("/tmp/libxom.log", "a");
+    if(!fp) 
+        return;
+    fprintf(fp, "%s [%lu]\n", buf, getpid());
+    fclose(fp);
+}
+
+static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
+    char mpath[64] = {0, };
+    char perms[3] = {0, };
+    char *line = NULL;
+    size_t len = 0;
+    ssize_t count = 0;
+    FILE* maps;
+
+    printf("Segfault at %p!\n", (void*) siginfo->si_addr);
+
+    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
+    maps = fopen(mpath, "r");
+    if(!maps)
+        return;
+    
+    // Get amount of executable memory regions
+    while (getline(&line, &len, maps) != -1) {
+        printf("%s", line);
+        free(line);
+        line = NULL;
+    }
+    fclose(maps);
+    exit(1);
+}
+
+
+static void setup_debug_fault_handler(){
+    struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = (void*) debug_fault_handler;
+    sigaction(SIGSEGV, &sa, NULL);
 }
 
 __attribute__((constructor))

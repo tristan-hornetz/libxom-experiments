@@ -1,6 +1,4 @@
-// Based on the sample code from "Intel Advanced Encryption Standard
-// (AES) New Instructions Set" white paper, Gueron, 2014
-
+.file "src/aes.s"
 .text
 
 .globl clear_sse_regs
@@ -22,8 +20,89 @@ clear_sse_regs:
     pxor   %xmm14, %xmm14
     pxor   %xmm15, %xmm15
     ret
+    
+.align 128
 
-PREPARE_ROUNDKEY_128:
+// void aes_gctr_linear(void *icb, void* x, void *y, unsigned int num_blocks)
+// icb: %rdi
+// x: %rsi
+// y: %rdx
+// num_blocks: %rcx
+.global aes_gctr_linear
+aes_gctr_linear:
+    // Backup callee-saved register
+    push %r15
+
+    // Load key from immediates
+    movabs $0x123456789abcdef,%r15
+    movq   %r15,%xmm0
+    movabs $0x123456789abcdef,%r15
+    movq   %r15,%xmm1
+    movlhps	%xmm1,%xmm0
+    xor %r15, %r15
+    not %r15
+
+    // Prepare for round key generation
+    movaps %xmm0, %xmm1
+    movaps %xmm0, %xmm4
+    
+    // Generate round keys for encryption, put into xmm[4-14]
+    // Note that we cannot call aes_gctr_linear_prepare_roundkey_128,
+    // since another thread could overwrite the return address while
+    // the round keys are still in the SSE registers, thus
+    // hijacking the control flow and gaining access to the key.
+    // Therefore, the return address must not be stored in memory.
+    // However, if we store it in a register, an attacker must
+    // trigger an interrupt to modify the return value, which
+    // causes the hypervisor to clear the SSE registers before
+    // the attacker can gain control.
+
+    aeskeygenassist $1, %xmm1, %xmm2
+    lea 0x5(%rip), %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm5
+    aeskeygenassist $2, %xmm1, %xmm2
+    add $0x13, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm6
+    aeskeygenassist $4, %xmm1, %xmm2
+    add $0x13, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm7
+    aeskeygenassist $8, %xmm1, %xmm2
+    add $0x10, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm8
+    aeskeygenassist $16, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm9
+    aeskeygenassist $32, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm10
+    aeskeygenassist $64, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm11
+    aeskeygenassist $0x80, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm12
+    aeskeygenassist $0x1b, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm13
+    aeskeygenassist $0x36, %xmm1, %xmm2
+    add $0x11, %rax
+    jmp aes_gctr_linear_prepare_roundkey_128
+    movdqa %xmm1, %xmm14
+
+    // Load initial counter block
+    movaps (%rdi), %xmm3
+    jmp aes_gctr_linear_enc_block
+
+aes_gctr_linear_prepare_roundkey_128:
     pshufd $255, %xmm2, %xmm2
     movdqa %xmm1, %xmm3
     pslldq $4, %xmm3
@@ -33,223 +112,12 @@ PREPARE_ROUNDKEY_128:
     pslldq $4, %xmm3
     pxor %xmm3, %xmm1
     pxor %xmm2, %xmm1
-    ret
+    jmp *%rax
 
-AES_128_Key_ExpansionEnc:
-    // expect user key in xmm1
-    aeskeygenassist $1, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm5
-    aeskeygenassist $2, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm6
-    aeskeygenassist $4, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm7
-    aeskeygenassist $8, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm8
-    aeskeygenassist $16, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm9
-    aeskeygenassist $32, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm10
-    aeskeygenassist $64, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm11
-    aeskeygenassist $0x80, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm12
-    aeskeygenassist $0x1b, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm13
-    aeskeygenassist $0x36, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm14
-    ret
-
-AES_128_Key_ExpansionDec:
-    // expect user key in xmm1
-    aeskeygenassist $1, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm5
-    aeskeygenassist $2, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc  %xmm1, %xmm6
-    aeskeygenassist $4, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc  %xmm1, %xmm7
-    aeskeygenassist $8, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm8
-    aeskeygenassist $16, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc  %xmm1, %xmm9
-    aeskeygenassist $32, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm10
-    aeskeygenassist $64, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm11
-    aeskeygenassist $128, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm12
-    aeskeygenassist $27, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    aesimc %xmm1, %xmm13
-    aeskeygenassist $54, %xmm1, %xmm2
-    call PREPARE_ROUNDKEY_128
-    movdqa %xmm1, %xmm14
-    ret
-
-// void aes_encrypt(struct key_prime_fun *key, const void *cleartext_block, void *ciphertext_block);
-.global aes_encrypt
-aes_encrypt:
-    // Prologue
-    push %rbp
-    mov %rsp, %rbp
-    push %rdx
-    push %rsi
-
-    // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    jmp *%rdi
-
-.globl __aes_encrypt_key_prime_return
-__aes_encrypt_key_prime_return:
-
-    // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
-    movlhps	%xmm1, %xmm0
-
-    // Put key into xmm1 and xmm4 as well
-    movaps %xmm0, %xmm1
-    movaps %xmm0, %xmm4
-
-    // Clear xmm2 for aeskeygenassist
-    pxor   %xmm2, %xmm2
-
-    // Generate round keys for encryption, put into xmm[4-14]
-    call AES_128_Key_ExpansionEnc
-
-    // Load plain text block into xmm0
-    pop %rax
-    movaps (%rax), %xmm0
-
-    // Encrypt the block
-    pxor       %xmm4,  %xmm0
-    aesenc     %xmm5,  %xmm0
-    aesenc     %xmm6,  %xmm0
-    aesenc     %xmm7,  %xmm0
-    aesenc     %xmm8,  %xmm0
-    aesenc     %xmm9, %xmm0
-    aesenc     %xmm10, %xmm0
-    aesenc     %xmm11, %xmm0
-    aesenc     %xmm12, %xmm0
-    aesenc     %xmm13, %xmm0
-    aesenclast %xmm14, %xmm0
-
-    // Store encrypted block into output buffer
-    pop %rax
-    movaps %xmm0, (%rax)
-
-    call clear_sse_regs
-    leave
-    ret
-
-// void aes_decrypt(struct key_prime_fun *key, const void *ciphertext_block, void *cleartext_block);
-.global aes_decrypt
-aes_decrypt:
-    // Prologue
-    push %rbp
-    mov %rsp, %rbp
-    push %rdx
-    push %rsi
-
-    // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    jmp *%rdi
-
-.globl __aes_decrypt_key_prime_return
-__aes_decrypt_key_prime_return:
-
-    // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
-    movlhps	%xmm1, %xmm0
-
-    // Put key into xmm1 and xmm4 as well
-    movaps %xmm0, %xmm1
-    movaps %xmm0, %xmm4
-
-    // Clear xmm2 for aeskeygenassist
-    pxor   %xmm2, %xmm2
-
-    // Generate round keys for decryption, put into xmm[4-14]
-    call AES_128_Key_ExpansionDec
-
-    // Load cipher text block into xmm0
-    pop %rax
-    movaps (%rax), %xmm0
-
-    # Decrypt the block.
-    pxor       %xmm14, %xmm0
-    aesdec     %xmm13, %xmm0
-    aesdec     %xmm12, %xmm0
-    aesdec     %xmm11, %xmm0
-    aesdec     %xmm10, %xmm0
-    aesdec     %xmm9, %xmm0
-    aesdec     %xmm8,  %xmm0
-    aesdec     %xmm7,  %xmm0
-    aesdec     %xmm6,  %xmm0
-    aesdec     %xmm5,  %xmm0
-    aesdeclast %xmm4,  %xmm0
-
-    // Store plain text into output buffer
-    pop %rax
-    movaps %xmm0, (%rax)
-
-    call clear_sse_regs
-
-    leave
-    ret
-
-
-// key: %rdi
-// icb: %rsi
-// x: %rdx,
-// y: %rcx,
-// num_blocks: %r8
-// void aes_encrypt_counter(struct key_prime_fun *key, void *icb, void* x, void *y, unsigned int num_blocks)
-.global aes_encrypt_counter
-aes_encrypt_counter:
-    // Prologue
-    push %rbp
-    mov %rsp, %rbp
-
-    push %rcx
-    // Put lower 64 bits of key in %xmm0[0:64] and upper 64 bits of key in %xmm1[0:64]
-    jmp *%rdi
-
-.global __aes_encrypt_counter_key_prime_return
-__aes_encrypt_counter_key_prime_return:
-
-    // Move lower half of xmm1 into upper half of xmm0, full key is now in xmm0
-    movlhps	%xmm1, %xmm0
-
-    // Put key into xmm1 and xmm4 as well
-    movaps %xmm0, %xmm1
-    movaps %xmm0, %xmm4
-
-    // Clear xmm2 for aeskeygenassist
-    pxor   %xmm2, %xmm2
-
-    // Generate round keys for encryption, put into xmm[4-14]
-    call AES_128_Key_ExpansionEnc
-
-    // Load initial counter block
-    movaps (%rsi), %xmm15
-
-aes_encrypt_counter_enc_block:
+aes_gctr_linear_enc_block:
 
     // Load counter block into xmm0
-    movaps %xmm15, %xmm0
+    movaps %xmm3, %xmm0
 
     // Encrypt the block
     pxor       %xmm4,  %xmm0
@@ -265,28 +133,55 @@ aes_encrypt_counter_enc_block:
     aesenclast %xmm14, %xmm0
 
     // Load plain text block
-    movaps (%rdx), %xmm1
+    movaps (%rsi), %xmm1
     // XOR with encrypted counter
     pxor %xmm1, %xmm0
 
     // Store to output buffer
-    movaps %xmm0, (%rcx)
+    movaps %xmm0, (%rdx)
+
+    // Were our registers cleared?
+    // If so, abort and tell caller where to restart
+    cmp $0xbabababa, %r15d
+    je aes_gctr_linear_enc_done
 
     // Decrement counter
-    dec %r8
-    jz aes_encrypt_counter_enc_exit
+    dec %rcx
+    jz aes_gctr_linear_enc_done
 
     // Increment counter block
     pcmpeqw %xmm1, %xmm1
     psrldq $12, %xmm1
-    psubd %xmm1, %xmm15
+    psubd %xmm1, %xmm3
 
-    // Increment block pointers
-    add $0x10, %rcx
+    // Increment input and output pointers
     add $0x10, %rdx
+    add $0x10, %rsi
 
-    jmp aes_encrypt_counter_enc_block
-aes_encrypt_counter_enc_exit:
-    call clear_sse_regs
-    leave
+    jmp aes_gctr_linear_enc_block
+
+aes_gctr_linear_enc_done:
+    // Clear SSE registers before returning
+    pxor   %xmm0, %xmm0
+    movaps %xmm0, %xmm1
+    movaps %xmm0, %xmm2
+    movaps %xmm0, %xmm3
+    movaps %xmm0, %xmm4
+    movaps %xmm0, %xmm5
+    movaps %xmm0, %xmm6
+    movaps %xmm0, %xmm7
+    movaps %xmm0, %xmm8
+    movaps %xmm0, %xmm9
+    movaps %xmm0, %xmm10
+    movaps %xmm0, %xmm11
+    movaps %xmm0, %xmm12
+    movaps %xmm0, %xmm13
+    movaps %xmm0, %xmm14
+    movaps %xmm0, %xmm15
+    
+    // Return the amount of remaining blocks
+    mov %rcx, %rax
+
+    // Restore callee-saved register
+    pop %r15
     ret
