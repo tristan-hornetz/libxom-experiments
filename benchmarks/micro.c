@@ -214,7 +214,7 @@ benchmark(aes) {
 
     fprintf(fp, "aes_times_noxom = ");
     for(i = 0; i < num_repetitions; i++){
-        memset(enc_target, 0xba, 2 * PAGE_SIZE);
+        memset(enc_target, i & 0xff, 2 * PAGE_SIZE);
         flush_all(enc_target, 2 * PAGE_SIZE);
         START_TIMER;
         aes_gcm_encrypt(&context);
@@ -226,7 +226,7 @@ benchmark(aes) {
     context.gctr = aes_xom;
     fprintf(fp, "aes_times_xom = ");
     for(i = 0; i < num_repetitions; i++){
-        memset(enc_target, 0xba, 2 * PAGE_SIZE);
+        memset(enc_target, i & 0xff, 2 * PAGE_SIZE);
         flush_all(enc_target, 2 * PAGE_SIZE);
         START_TIMER;
         aes_gcm_encrypt(&context);
