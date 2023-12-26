@@ -67,9 +67,9 @@ struct {
     unsigned char jump_into_backup;   // Do we have to jump into backup code when unmapping this region?
 } typedef text_region;
 
+int32_t xomfd = -1;
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
-static int32_t xomfd = -1;
 static unsigned int xom_mode = XOM_MODE_UNSUPPORTED;
 static void* xom_base_addr = NULL;
 static void* (*dlopen_original)(const char *, int) = NULL;

@@ -57,11 +57,12 @@
 #define str(x) #x
 #endif
 #define run_benchmark(name) (benchmark_##name())
+#define extern_benchmark(name) int benchmark_##name (void)
 #define benchmark(name_)                                                 \
 static int internal_benchmark_##name_(FILE *restrict fp,                \
     const char *const restrict name, uint64_t timer_);                  \
                                                                         \
-static int benchmark_##name_ (void) {                                    \
+int benchmark_##name_ (void) {                                          \
     FILE* fp = open_benchmark_file(str(name_) ".py");                    \
     int ret;                                                            \
                                                                         \
