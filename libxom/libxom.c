@@ -707,6 +707,26 @@ const int get_xom_mode(){
     wrap_call(int, get_xom_mode_internal());
 }
 
+static inline void install_dlopen_hook(void){
+    dlopen_original = dlsym(RTLD_NEXT, "dlopen");
+    if(dlopen_original == dlopen)
+        dlopen_original = NULL;
+    dlmopen_original = dlsym(RTLD_NEXT, "dlmopen");
+    if(dlmopen_original == dlmopen)
+        dlmopen_original = NULL;
+}
+
+static uint8_t is_pku_supported(void){
+    unsigned long a, b, c, d;
+
+    __cpuid_count(7, 0, a, b, c, d);
+
+    return (uint8_t) (c >> 3) & 1;
+}
+
+int xom_reduce_privileges(void) {
+    wrap_call(int, xom_reduce_privileges_internal())
+}
 
 #ifdef DEBUG_FAULT_HANDLER
 void log_process_start(){
@@ -720,7 +740,7 @@ void log_process_start(){
     fgets(buf, 64, fp);
     fclose(fp);
     fp = fopen("/tmp/libxom.log", "a");
-    if(!fp) 
+    if(!fp)
         return;
     fprintf(fp, "%s [%lu]\n", buf, getpid());
     fclose(fp);
@@ -756,7 +776,7 @@ static void debug_fault_handler(int __attribute__((unused)) signum,
     maps = fopen(mpath, "r");
     if(!maps)
         return;
-    
+
     // Get amount of executable memory regions
     while (getline(&line, &len, maps) != -1) {
         printf("%s", line);
@@ -775,78 +795,6 @@ static void setup_debug_fault_handler(){
     sigaction(SIGSEGV, &sa, NULL);
 }
 #endif
-
-static inline void install_dlopen_hook(void){
-    dlopen_original = dlsym(RTLD_NEXT, "dlopen");
-    if(dlopen_original == dlopen)
-        dlopen_original = NULL;
-    dlmopen_original = dlsym(RTLD_NEXT, "dlmopen");
-    if(dlmopen_original == dlmopen)
-        dlmopen_original = NULL;
-}
-
-static uint8_t is_pku_supported(void){
-    unsigned long a, b, c, d;
-
-    __cpuid_count(7, 0, a, b, c, d);
-
-    return (uint8_t) (c >> 3) & 1;
-}
-
-int xom_reduce_privileges(void) {
-    wrap_call(int, xom_reduce_privileges_internal())
-}
-
-
-void log_process_start(){
-    char file[32] = {0, };
-    char buf[PATH_MAX] = {0, };
-    FILE *fp;
-    sprintf(file, "/proc/self/cmdline");
-    fp = fopen(file, "r");
-    if(!fp)
-        return;
-    fgets(buf, 64, fp);
-    fclose(fp);
-    fp = fopen("/tmp/libxom.log", "a");
-    if(!fp) 
-        return;
-    fprintf(fp, "%s [%lu]\n", buf, getpid());
-    fclose(fp);
-}
-
-static void debug_fault_handler(int signum, siginfo_t * siginfo, ucontext_t *) {
-    char mpath[64] = {0, };
-    char perms[3] = {0, };
-    char *line = NULL;
-    size_t len = 0;
-    ssize_t count = 0;
-    FILE* maps;
-
-    printf("Segfault at %p!\n", (void*) siginfo->si_addr);
-
-    snprintf(mpath, sizeof(mpath), "/proc/%u/maps", (unsigned int) getpid());
-    maps = fopen(mpath, "r");
-    if(!maps)
-        return;
-    
-    // Get amount of executable memory regions
-    while (getline(&line, &len, maps) != -1) {
-        printf("%s", line);
-        free(line);
-        line = NULL;
-    }
-    fclose(maps);
-    exit(1);
-}
-
-
-static void setup_debug_fault_handler(){
-    struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO;
-    sa.sa_sigaction = (void*) debug_fault_handler;
-    sigaction(SIGSEGV, &sa, NULL);
-}
 
 __attribute__((constructor))
 void initialize_libxom(void) {
@@ -875,7 +823,7 @@ void initialize_libxom(void) {
             migrate_all_code_internal();
             break;
         }
-        else if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
+        if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)){
             migrate_shared_libraries_internal();
             break;
         }

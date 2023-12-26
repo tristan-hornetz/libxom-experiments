@@ -1,5 +1,3 @@
-set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} -fsanitize=address")
-
 add_library(xom-aes-gcm SHARED
         src/gcm.c
         src/gfmul.s
