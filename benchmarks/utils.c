@@ -1,4 +1,5 @@
 #define _GNU_SOURCE
+#include <libxom.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -89,6 +90,7 @@ FILE* open_benchmark_file(const char* restrict name) {
         fprintf(ret, "_COMPILER = \"%s %d.%d.%d\"\n", COMPILER_NAME, COMPILER_MAJOR, COMPILER_MINOR, COMPILER_PATCH);
         fprintf(ret, "_CPU = \"%s\"\n", cpu_ident);
         fprintf(ret, "_OS = \"%s\"\n", os_version);
+        fprintf(ret, "_XOM_MODE = \"%u\"\n", get_xom_mode());
 
         fprintf(ret, "\n");
     }
