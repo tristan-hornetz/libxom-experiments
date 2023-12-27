@@ -87,7 +87,7 @@ benchmark(primes){
     return 0;
 }
 
-// Execute a single-page nop slide
+// Call a function containing only a RET instruction
 benchmark(access) {
     uint64_t timer;
     const static unsigned num_repetitions = 1000, num_rounds = 100;
