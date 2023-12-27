@@ -88,6 +88,51 @@ benchmark(primes){
 }
 
 // Execute a single-page nop slide
+benchmark(access) {
+    uint64_t timer;
+    const static unsigned num_repetitions = 1000, num_rounds = 100;
+    unsigned i, j;
+    char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    struct xombuf* nop_slide_xom = xom_alloc_pages(PAGE_SIZE);
+    void (*access_fun)(void) = ((void (*)(void))nop_slide);
+    void (*access_xom_fun)(void);
+    uint64_t times[num_repetitions];
+
+
+    nop_slide[0] = RET;
+    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE);
+    access_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom);
+
+    fprintf(fp, "access_times_noxom = [\n");
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i< num_repetitions; i++) {
+            START_TIMER;
+            access_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, sizeof(times)/sizeof(*times), ',');
+        sched_yield();
+    }
+    fprintf(fp, "]\n\naccess_times_xom = [");
+    fflush(fp);
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i< num_repetitions; i++){
+            START_TIMER;
+            access_xom_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, countof(times), ',');
+        sched_yield();
+    }
+    fprintf(fp, "]\n");
+    munmap(nop_slide, PAGE_SIZE);
+    xom_free(nop_slide_xom);
+    return 0;
+}
+
+// Execute a single-page nop slide
 benchmark(nop_slide) {
     uint64_t timer;
     const static unsigned num_repetitions = 1000, num_rounds = 100;

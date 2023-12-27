@@ -3,11 +3,13 @@
 #include "benchmark.h"
 
 // Micro
+extern_benchmark(access);
 extern_benchmark(nop_slide);
 extern_benchmark(primes);
 extern_benchmark(jumper);
 extern_benchmark(aes);
 
+// Allocation
 extern_benchmark(mmap1);
 extern_benchmark(mmap2);
 extern_benchmark(mmap4);
@@ -36,6 +38,20 @@ extern_benchmark(lock1024);
 extern_benchmark(lock2048);
 extern_benchmark(lock4096);
 
+extern_benchmark(free1);
+extern_benchmark(free2);
+extern_benchmark(free4);
+extern_benchmark(free8);
+extern_benchmark(free16);
+extern_benchmark(free32);
+extern_benchmark(free64);
+extern_benchmark(free128);
+extern_benchmark(free256);
+extern_benchmark(free512);
+extern_benchmark(free1024);
+extern_benchmark(free2048);
+extern_benchmark(free4096);
+
 int main(int argc, char* argv[]){
     const int xom_mode = get_xom_mode();
     if(argc > 1)
@@ -51,6 +67,7 @@ int main(int argc, char* argv[]){
     if(init_utils() < 0)
         return 1;
 
+    run_benchmark(access);
     run_benchmark(nop_slide);
     run_benchmark(primes);
     run_benchmark(jumper);
@@ -83,6 +100,20 @@ int main(int argc, char* argv[]){
     run_benchmark(lock1024);
     run_benchmark(lock2048);
     run_benchmark(lock4096);
+
+    run_benchmark(free1);
+    run_benchmark(free2);
+    run_benchmark(free4);
+    run_benchmark(free8);
+    run_benchmark(free16);
+    run_benchmark(free32);
+    run_benchmark(free64);
+    run_benchmark(free128);
+    run_benchmark(free256);
+    run_benchmark(free512);
+    run_benchmark(free1024);
+    run_benchmark(free2048);
+    run_benchmark(free4096);
 
     exit_utils();
     return 0;
