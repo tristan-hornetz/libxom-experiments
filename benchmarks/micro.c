@@ -20,7 +20,8 @@ extern void jumper_fun(void* base_address, uint16_t seed, uintptr_t num_jumps);
 static uint32_t primes_[NUM_PRIMES];
 
 static inline __attribute__((always_inline)) int is_prime(const uint32_t n, double (*sqrt_)(double)){
-    uint32_t upper_bound = (uint32_t) n < 2 ? 0 : (uint32_t) sqrt_(n), i = 2;
+    const uint32_t upper_bound = (uint32_t) n < 2 ? 0 : (uint32_t) sqrt_(n);
+    uint32_t i = 2;
     while(i <= upper_bound){
         if(!(n % i))
             return 0;

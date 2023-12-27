@@ -105,10 +105,14 @@ static int xom_invoke_xen(pxom_mapping mapping, unsigned int page_index, unsigne
         op.cmd = mmuext_cmd;
         op.arg1.mfn = base_gfn;
         op.arg2.nr_ents = page_c;
+#ifdef MODXOM_DEBUG
         printk(KERN_INFO "[MODXOM] Invoking Hypervisor with mfn 0x%lx for %u pages\n", op.arg1.mfn, op.arg2.nr_ents);
+#endif
         status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
         if(status){
+#ifdef MODXOM_DEBUG
             printk(KERN_INFO "[MODXOM] Failed - Status 0x%x\n", status);
+#endif
             status = -EINVAL;
             goto exit;
         }
@@ -670,7 +674,10 @@ static int __init modxom_init(void) {
     mutex_init(&file_lock);
     modxom_src_operand_page = (uint8_t *)__get_free_pages(GFP_KERNEL, get_order(PAGE_SIZE));
     entry = proc_create(MODXOM_PROC_FILE_NAME, 0666, NULL, &file_ops);
-    printk(KERN_INFO "[MODXOM] MODXOM Kernel Module loaded!\n");
+    if(xen_hvm_domain())
+        printk(KERN_INFO "[MODXOM] Initialized\n");
+    else
+        printk(KERN_INFO "[MODXOM] Error: This machine is not a XOM HVM domain, so modxom cannot be used!\n");
     return 0;
 }
 
