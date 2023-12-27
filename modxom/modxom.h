@@ -26,7 +26,7 @@ extern "C" {
 struct {
     uint32_t cmd;
     uint32_t num_pages;
-    uintptr_t base_addr;
+    uint64_t base_addr;
 } typedef modxom_cmd, *pmodxom_cmd;
 
 struct {

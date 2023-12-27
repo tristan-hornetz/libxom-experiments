@@ -89,8 +89,6 @@ const static char* libs_exempt[] = {
     return r;                       \
 }
 
-static int migrate_skip_type(unsigned int);
-
 static inline void __libxom_prologue(){
     pthread_mutex_lock(&lib_lock);
 }
@@ -98,6 +96,10 @@ static inline void __libxom_prologue(){
 static inline void __libxom_epilogue(){
     pthread_mutex_unlock(&lib_lock);
 }
+
+#if (defined(__x86_64__) || defined(_M_X64))
+
+static int migrate_skip_type(unsigned int);
 
 void *dlopen(const char *filename, int flags){
     void* ret;
@@ -119,7 +121,7 @@ void *dlmopen(Lmid_t lmid, const char *filename, int flags){
         migrate_skip_type(TEXT_TYPE_VDSO);
     return ret;
 }
-
+#endif
 
 /**
  * Parse the /proc/<pid>/maps file to find all executable memory segments
@@ -195,6 +197,8 @@ static text_region* explore_text_regions(){
 
     return regions;
 }
+
+#if (defined(__x86_64__) || defined(_M_X64))
 
 /**
  * Unmap the code specified by space, remap it as xom, and fill it with the data in dest
@@ -352,6 +356,7 @@ static inline int migrate_shared_libraries_internal(){
 static inline int migrate_all_code_internal(){
     return migrate_skip_type(TEXT_TYPE_VDSO);
 }
+#endif
 
 static p_xombuf xomalloc_page_internal(size_t size){
     void* current_address = xom_base_addr, *last_address = NULL;
@@ -436,7 +441,7 @@ static void* xom_lock_internal(struct xombuf* buf){
         cmd = (modxom_cmd) {
             .cmd = MODXOM_CMD_LOCK,
             .num_pages = (uint32_t) SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)) >> PAGE_SHIFT,
-            .base_addr = (uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
+            .base_addr = (uint64_t)(uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
         };
         status = write(xomfd, &cmd, sizeof(cmd));
         if(status < 0)
@@ -467,7 +472,7 @@ static void xom_free_internal(struct xombuf* buf){
         cmd = (modxom_cmd) {
             .cmd = MODXOM_CMD_FREE,
             .num_pages = SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)) >> PAGE_SHIFT,
-            .base_addr = (uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
+            .base_addr = (uint64_t)(uintptr_t) buf->address + c * ALLOC_CHUNK_SIZE
         };
         write(xomfd, &cmd, sizeof(cmd));
         munmap(buf->address, SIZE_CEIL(min(size_left, ALLOC_CHUNK_SIZE)));
@@ -492,7 +497,7 @@ static struct xom_subpages* xom_alloc_subpages_internal(size_t size){
         return NULL;
     
     cmd.cmd = MODXOM_CMD_INIT_SUBPAGES;
-    cmd.base_addr = (uintptr_t) xombuf->address;
+    cmd.base_addr = (uint64_t)(uintptr_t) xombuf->address;
     cmd.num_pages = SIZE_CEIL(xombuf->allocated_size) >> PAGE_SHIFT;
     status = write(xomfd, &cmd, sizeof(cmd));
     if(status < 0)
@@ -535,7 +540,7 @@ static void* write_into_subpages(struct xom_subpages* dest, size_t subpages_requ
     write_cmd->mxom_cmd = (modxom_cmd) {
         .cmd = MODXOM_CMD_WRITE_SUBPAGES,
         .num_pages = 1,
-        .base_addr = (uintptr_t) (dest->address + base_page * PAGE_SIZE),
+        .base_addr = (uint64_t)(uintptr_t) (dest->address + base_page * PAGE_SIZE),
     };
 
     write_cmd->xen_cmd.num_subpages = subpages_required;
@@ -677,6 +682,7 @@ void xom_free(struct xombuf* buf){
     __libxom_epilogue();    
 }
 
+#if (defined(__x86_64__) || defined(_M_X64))
 int xom_migrate_all_code(){
     wrap_call(int, migrate_all_code_internal());
 }
@@ -684,6 +690,17 @@ int xom_migrate_all_code(){
 int xom_migrate_shared_libraries(){
     wrap_call(int, migrate_shared_libraries_internal());
 }
+#else
+// Only supported for x64
+
+int xom_migrate_all_code(){
+    return -1;
+}
+
+int xom_migrate_shared_libraries(){
+    return -1;
+}
+#endif
 
 struct xom_subpages* xom_alloc_subpages(size_t size){
     wrap_call(p_xom_subpages, xom_alloc_subpages_internal(size))
@@ -707,6 +724,7 @@ const int get_xom_mode(){
     wrap_call(int, get_xom_mode_internal());
 }
 
+#if (defined(__x86_64__) || defined(_M_X64))
 static inline void install_dlopen_hook(void){
     dlopen_original = dlsym(RTLD_NEXT, "dlopen");
     if(dlopen_original == dlopen)
@@ -715,6 +733,7 @@ static inline void install_dlopen_hook(void){
     if(dlmopen_original == dlmopen)
         dlmopen_original = NULL;
 }
+#endif
 
 static uint8_t is_pku_supported(void){
     unsigned long a, b, c, d;
@@ -817,7 +836,7 @@ void initialize_libxom(void) {
         pthread_mutex_unlock(&lib_lock);
         return;
     }
-
+#if (defined(__x86_64__) || defined(_M_X64))
     while(*envp) {
         if(strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)){
             migrate_all_code_internal();
@@ -829,7 +848,7 @@ void initialize_libxom(void) {
         }
         envp++;
     }
-
+#endif
     #ifdef DEBUG_FAULT_HANDLER
     envp = __environ;
     while(*envp) {
@@ -844,9 +863,14 @@ void initialize_libxom(void) {
 
     while(!rval)
         _rdrand32_step((uint32_t*)&rval);
+    const unsigned int a = sizeof(uintptr_t);
+#if (defined(__x86_64__) || defined(_M_X64))
     xom_base_addr = (void*) (0x420000000000 + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
-
     install_dlopen_hook();
+#else
+    xom_base_addr = (void*) (0x42000000ul + ((rval << PAGE_SHIFT) & ~(0xff000000ul)));
+#endif
+
 
     pthread_mutex_unlock(&lib_lock);
 }
