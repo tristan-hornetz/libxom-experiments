@@ -14,6 +14,10 @@ struct attack_test;
 #define STR_PEND "[" CYN "*" CRESET "] "
 #define STR_FAIL "[" RED "-" CRESET "] "
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef union {
     struct {
         uint8_t noxom_works;
@@ -22,6 +26,15 @@ typedef union {
     } s;
     uint32_t d;
 } attack_status;
+
+struct xombuf {
+    void* address;
+    size_t allocated_size;
+    uint8_t locked;
+} typedef _xombuf, *p_xombuf;
+
+#ifdef __cplusplus
+}
 
 static_assert(sizeof(attack_status) == sizeof((attack_status){}.d), "attack_status layout error");
 
@@ -38,5 +51,8 @@ struct attack_test {
     attack_status run_test(void) const;
 } typedef attack_test;
 
+#else
+_Static_assert(sizeof(attack_status) == sizeof((attack_status){}.d), "attack_status layout error");
+#endif
 
 #endif //MICROARCHITECTURE_H

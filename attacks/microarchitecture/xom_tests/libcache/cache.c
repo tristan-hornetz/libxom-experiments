@@ -1,5 +1,7 @@
 #include "cache.h"
 
+char* mem;
+
 // ---------------------------------------------------------------------------
 void perf_init() {
   static struct perf_event_attr attr;
@@ -105,20 +107,20 @@ void maccess_tsx(void* ptr) {
 
 #elif defined(__i386__)
 // ---------------------------------------------------------------------------
-uint32_t rdtsc() {
+static uint32_t rdtsc() {
   uint32_t a, d;
   asm volatile("mfence");
 #if USE_RDTSCP
-  asm volatile("rdtscp" : "=a"(a), "=d"(d));
+  asm volatile("rdtscp" : "=a"(a), "=d"(d) :: "ecx");
 #else
-  asm volatile("rdtsc" : "=a"(a), "=d"(d));
+  asm volatile("rdtsc" : "=a"(a), "=d"(d) :: "ecx");
 #endif
   asm volatile("mfence");
   return a;
 }
 
 // ---------------------------------------------------------------------------
-void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p)); }
+static void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p)); }
 
 // ---------------------------------------------------------------------------
 void maccess(void *p) { asm volatile("mov (%0), %%eax\n" : : "c"(p) : "eax"); }

@@ -18,12 +18,6 @@
 
 extern "C" {
 #include "libcache/cacheutils.h"
-
-  struct xombuf {
-    void* address;
-    size_t allocated_size;
-    uint8_t locked;
-  } typedef _xombuf, *p_xombuf;
 }
 
 #define SECRET 'S'
@@ -77,7 +71,7 @@ void move_animal(Animal* animal) {
   animal->move();
 }
 
-static uint8_t spectre_btb_ca_test_fun_generic(const attack_test & config, bool xom) {
+static uint8_t spectre_btb_ca_ip_test_fun_generic(const attack_test & config, bool xom) {
   xombuf* xbuf;
   int pipefd[2], counter = 0, success_counter = 0, wait_status = 0;
   if(pipe(pipefd) < 0)
@@ -158,6 +152,7 @@ static uint8_t spectre_btb_ca_test_fun_generic(const attack_test & config, bool 
         munmap(static_cast<uint8_t *>(xbuf->address) + PAGE_SIZE, PAGE_SIZE);
         munmap(static_cast<uint8_t *>(xbuf->address) - PAGE_SIZE, PAGE_SIZE);
         xom_free(xbuf);
+        free(_mem);
 
         return success_counter > (config.num_samples / config.success_fraction) ?
               static_cast<uint8_t>(1) : static_cast<uint8_t>(0);
@@ -184,21 +179,11 @@ static uint8_t spectre_btb_ca_test_fun_generic(const attack_test & config, bool 
   }
 }
 
-static attack_status spectre_btb_ca_test_fun(const attack_test & config) {
-    uint8_t noxom = spectre_btb_ca_test_fun_generic(config, false),
-        xom = 0;//spectre_btb_ca_test_fun_generic(config, true);
+attack_status spectre_btb_ca_ip_test_fun(const attack_test & config) {
+    uint8_t noxom = spectre_btb_ca_ip_test_fun_generic(config, false),
+        xom = spectre_btb_ca_ip_test_fun_generic(config, true);
 
     if(!~noxom || !~xom)
       return {{0, 0, 1}};
     return {{noxom, xom, 0}};
 }
-
-
-attack_test spectre_btb_ca = {
-  spectre_btb_ca_test_fun,
-  "spectre-btb-ca",
-  "spectre",
-  1,
-  100,
-  5
-};

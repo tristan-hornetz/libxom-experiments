@@ -747,7 +747,7 @@ int xom_reduce_privileges(void) {
     wrap_call(int, xom_reduce_privileges_internal())
 }
 
-#ifdef DEBUG_FAULT_HANDLER
+#if defined(DEBUG_FAULT_HANDLER) && (defined(__x86_64__) || defined(_M_X64))
 void log_process_start(){
     char file[32] = {0, };
     char buf[PATH_MAX] = {0, };
@@ -849,7 +849,7 @@ void initialize_libxom(void) {
         envp++;
     }
 #endif
-    #ifdef DEBUG_FAULT_HANDLER
+    #if defined(DEBUG_FAULT_HANDLER) && (defined(__x86_64__) || defined(_M_X64))
     envp = __environ;
     while(*envp) {
         if(strstr(*envp, "LIBXOM_LOG_STARTUP=true")){

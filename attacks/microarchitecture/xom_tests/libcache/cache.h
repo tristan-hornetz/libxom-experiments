@@ -20,7 +20,7 @@
  * ============================================================ */
 static size_t CACHE_MISS = 0;
 static size_t pagesize = 0;
-char *mem;
+extern char *mem;
 
 #define USE_RDTSC_BEGIN_END     0
 
@@ -157,7 +157,7 @@ size_t detect_flush_reload_threshold();
 void maccess_speculative(void* ptr);
 
 // ---------------------------------------------------------------------------
-jmp_buf trycatch_buf;
+static jmp_buf trycatch_buf;
 
 // ---------------------------------------------------------------------------
 void unblock_signal(int signum __attribute__((__unused__)));

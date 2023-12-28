@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <fcntl.h>
 #include "microarchitecture.h"
-
-int main_btb(int argc, char* argv[]);
+#include "attacks.h"
 
 attack_status attack_test::run_test() const {
     char logfile_path[0x100];
@@ -12,7 +11,7 @@ attack_status attack_test::run_test() const {
     printf(STR_PEND "Running test '%s'...", name);
     fflush(stdout);
 
-    const auto log_fd = open(logfile_path, O_WRONLY | O_CREAT);
+    const auto log_fd = open(logfile_path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     const auto stdout_back = dup(1), stderr_back = dup(2);
     close(1);
     close(2);
@@ -20,6 +19,8 @@ attack_status attack_test::run_test() const {
     dup2(log_fd, 2);
 
     const auto ret = test_fun(*this);
+
+    printf("\n");
 
     dup2(stdout_back, 1);
     dup2(stderr_back, 2);
@@ -35,9 +36,7 @@ attack_status attack_test::run_test() const {
     return ret;
 }
 
-extern attack_test spectre_btb_ca;
-
 int main(int argc, char* argv[]){
-    (void) spectre_btb_ca.run_test();
+    (void) meltdown.run_test();
     return 0;
 }

@@ -20,7 +20,7 @@
  * ============================================================ */
 static size_t CACHE_MISS = 0;
 static size_t pagesize = 0;
-char *mem;
+static char *mem;
 
 #define USE_RDTSC_BEGIN_END     0
 
@@ -35,7 +35,7 @@ char *mem;
 
 // ---------------------------------------------------------------------------
 static size_t perf_fd;
-void perf_init();
+static void perf_init();
 
 #if defined(__x86_64__)
 // ---------------------------------------------------------------------------
@@ -74,23 +74,23 @@ void maccess_tsx(void* ptr);
 
 #elif defined(__i386__)
 // ---------------------------------------------------------------------------
-uint32_t rdtsc();
+static uint32_t rdtsc();
 
 // ---------------------------------------------------------------------------
-void flush(void *p);
+static void flush(void *p);
 
 // ---------------------------------------------------------------------------
-void maccess(void *p);
+static void maccess(void *p);
 
 // ---------------------------------------------------------------------------
-void mfence();
+static void mfence();
 
 // ---------------------------------------------------------------------------
-void nospec();
+static void nospec();
 
 #include <cpuid.h>
 // ---------------------------------------------------------------------------
-int has_tsx();
+static int has_tsx();
 
 #elif defined(__aarch64__)
 #if ARM_CLOCK_SOURCE == ARM_CLOCK_MONOTONIC
@@ -142,51 +142,51 @@ void nospec();
 #endif
 
 // ---------------------------------------------------------------------------
-int flush_reload(void *ptr);
+static int flush_reload(void *ptr);
 
 // ---------------------------------------------------------------------------
-int flush_reload_t(void *ptr);
+static int flush_reload_t(void *ptr);
 
 // ---------------------------------------------------------------------------
-int reload_t(void *ptr);
+static int reload_t(void *ptr);
 
 // ---------------------------------------------------------------------------
-size_t detect_flush_reload_threshold();
+static size_t detect_flush_reload_threshold();
 
 // ---------------------------------------------------------------------------
-void maccess_speculative(void* ptr);
+static void maccess_speculative(void* ptr);
 
 // ---------------------------------------------------------------------------
-jmp_buf trycatch_buf;
+static jmp_buf trycatch_buf;
 
 // ---------------------------------------------------------------------------
-void unblock_signal(int signum __attribute__((__unused__)));
+static void unblock_signal(int signum __attribute__((__unused__)));
 
 // ---------------------------------------------------------------------------
-void trycatch_segfault_handler(int signum);
+static void trycatch_segfault_handler(int signum);
 
 // ---------------------------------------------------------------------------
-int try_start();
+static int try_start();
 
 // ---------------------------------------------------------------------------
-void try_end();
+static void try_end();
 
 // ---------------------------------------------------------------------------
-void try_abort();
+static void try_abort();
 
 // ---------------------------------------------------------------------------
-void cache_encode(char data);
+static void cache_encode(char data);
 
 // ---------------------------------------------------------------------------
-void cache_decode_pretty(char *leaked, int index);
+static void cache_decode_pretty(char *leaked, int index);
 
 // ---------------------------------------------------------------------------
-void flush_shared_memory();
+static void flush_shared_memory();
 #endif
 
 
 // ---------------------------------------------------------------------------
-void perf_init() {
+static void perf_init() {
   static struct perf_event_attr attr;
   attr.type = PERF_TYPE_HARDWARE;
   attr.config = PERF_COUNT_HW_CPU_CYCLES;
@@ -303,19 +303,19 @@ uint32_t rdtsc() {
 }
 
 // ---------------------------------------------------------------------------
-void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p)); }
+static void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p)); }
 
 // ---------------------------------------------------------------------------
-void maccess(void *p) { asm volatile("mov (%0), %%eax\n" : : "c"(p) : "eax"); }
+static void maccess(void *p) { asm volatile("mov (%0), %%eax\n" : : "c"(p) : "eax"); }
 
 // ---------------------------------------------------------------------------
-void mfence() { asm volatile("mfence"); }
+static void mfence() { asm volatile("mfence"); }
 
 // ---------------------------------------------------------------------------
-void nospec() { asm volatile("lfence"); }
+static void nospec() { asm volatile("lfence"); }
 
 // ---------------------------------------------------------------------------
-int has_tsx() {
+static int has_tsx() {
   if (__get_cpuid_max(0, NULL) >= 7) {
     unsigned a, b, c, d;
     __cpuid_count(7, 0, a, b, c, d);
@@ -506,7 +506,7 @@ void nospec() { asm volatile( "hwsync" ); }
 #endif
 
 // ---------------------------------------------------------------------------
-int flush_reload(void *ptr) {
+static int flush_reload(void *ptr) {
   uint64_t start = 0, end = 0;
 
 #if USE_RDTSC_BEGIN_END
@@ -532,8 +532,9 @@ int flush_reload(void *ptr) {
 }
 
 // ---------------------------------------------------------------------------
-int flush_reload_t(void *ptr) {
+static int flush_reload_t(void *ptr) {
   uint64_t start = 0, end = 0;
+
 #if USE_RDTSC_BEGIN_END
   start = rdtsc_begin();
 #else
@@ -554,7 +555,7 @@ int flush_reload_t(void *ptr) {
 }
 
 // ---------------------------------------------------------------------------
-int reload_t(void *ptr) {
+static int reload_t(void *ptr) {
   uint64_t start = 0, end = 0;
 
 #if USE_RDTSC_BEGIN_END
@@ -576,16 +577,15 @@ int reload_t(void *ptr) {
 
 
 // ---------------------------------------------------------------------------
-size_t detect_flush_reload_threshold() {
+static size_t detect_flush_reload_threshold() {
   size_t reload_time = 0, flush_reload_time = 0, i, count = 1000000;
   size_t dummy[16];
-  size_t *ptr = &(dummy[8]);
+  size_t *ptr = dummy + 8;
 
   maccess(ptr);
   for (i = 0; i < count; i++) {
     reload_time += reload_t(ptr);
   }
-
   for (i = 0; i < count; i++) {
     flush_reload_time += flush_reload_t(ptr);
   }
@@ -596,7 +596,7 @@ size_t detect_flush_reload_threshold() {
 }
 
 // ---------------------------------------------------------------------------
-void maccess_speculative(void* ptr) {
+static void maccess_speculative(void* ptr) {
     int i;
     size_t dummy = 0;
     void* addr;
@@ -611,7 +611,7 @@ void maccess_speculative(void* ptr) {
 }
 
 // ---------------------------------------------------------------------------
-void unblock_signal(int signum __attribute__((__unused__))) {
+static void unblock_signal(int signum __attribute__((__unused__))) {
   sigset_t sigs;
   sigemptyset(&sigs);
   sigaddset(&sigs, signum);
@@ -619,7 +619,7 @@ void unblock_signal(int signum __attribute__((__unused__))) {
 }
 
 // ---------------------------------------------------------------------------
-void trycatch_segfault_handler(int signum) {
+static void trycatch_segfault_handler(int signum) {
   (void)signum;
 
   int i;
@@ -630,7 +630,7 @@ void trycatch_segfault_handler(int signum) {
 }
 
 // ---------------------------------------------------------------------------
-int try_start() {
+static int try_start() {
 #if defined(__i386__) || defined(__x86_64__)
     if(has_tsx()) {
         unsigned status;
@@ -652,7 +652,7 @@ int try_start() {
 }
 
 // ---------------------------------------------------------------------------
-void try_end() {
+static void try_end() {
 #if defined(__i386__) || defined(__x86_64__)
     if(!has_tsx())
 #endif
@@ -665,7 +665,7 @@ void try_end() {
 }
 
 // ---------------------------------------------------------------------------
-void try_abort() {
+static void try_abort() {
 #if defined(__i386__) || defined(__x86_64__)
     if(has_tsx()) {
         asm volatile(".byte 0x0f; .byte 0x01; .byte 0xd5" ::: "memory");
@@ -677,12 +677,12 @@ void try_abort() {
 }
 
 // ---------------------------------------------------------------------------
-void cache_encode(char data) {
+static void cache_encode(char data) {
   maccess(mem + data * pagesize);
 }
 
 // ---------------------------------------------------------------------------
-void cache_decode_pretty(char *leaked, int index) {
+static void cache_decode_pretty(char *leaked, int index) {
   for(int i = 0; i < 256; i++) {
     int mix_i = ((i * 167) + 13) & 255; // avoid prefetcher
     if(flush_reload(mem + mix_i * pagesize)) {
@@ -697,7 +697,7 @@ void cache_decode_pretty(char *leaked, int index) {
 }
 
 // ---------------------------------------------------------------------------
-void flush_shared_memory() {
+static void flush_shared_memory() {
   for(int j = 0; j < 256; j++) {
     flush(mem + j * pagesize);
   }
