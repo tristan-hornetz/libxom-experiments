@@ -36,9 +36,12 @@ attack_status attack_test::run_test() const {
     return ret;
 }
 
+extern "C" int ridl_generic_c(uint32_t num_samples, uint32_t success_rate);
+
 int main(int argc, char* argv[]){
     (void) spectre_btb_ca_ip.run_test();
     (void) spectre_pht_sa_ip.run_test();
     (void) meltdown.run_test();
+    //ridl_generic_c(100000, 0);
     return 0;
 }

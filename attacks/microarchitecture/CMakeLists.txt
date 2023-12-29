@@ -7,6 +7,8 @@ add_executable(microarchitecture
         xom_tests/spectre/PHT.c
         xom_tests/spectre/RSB.c
         xom_tests/meltdown.c
+        xom_tests/ridl.c
+        xom_tests/load_value.s
 )
 target_link_directories(microarchitecture PUBLIC "/usr/lib32")
 target_link_libraries(microarchitecture PUBLIC xom-static32 gcc)
