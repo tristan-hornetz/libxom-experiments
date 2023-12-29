@@ -24,7 +24,7 @@ static attack_test spectre_btb_ca_ip = {
     "spectre-btb-ca-ip",
     "spectre",
     1,
-    100,
+    50,
     5
  };
 

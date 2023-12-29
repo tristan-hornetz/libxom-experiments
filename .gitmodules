@@ -1,3 +1,0 @@
-[submodule "attacks/microarchitecture/transientfail"]
-	path = attacks/microarchitecture/transientfail
-	url = git@github.com:tristan-hornetz/transientfail.git

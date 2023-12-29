@@ -37,6 +37,8 @@ attack_status attack_test::run_test() const {
 }
 
 int main(int argc, char* argv[]){
+    (void) spectre_btb_ca_ip.run_test();
+    (void) spectre_pht_sa_ip.run_test();
     (void) meltdown.run_test();
     return 0;
 }
