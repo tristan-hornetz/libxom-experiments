@@ -39,38 +39,38 @@ static void perf_init();
 
 #if defined(__x86_64__)
 // ---------------------------------------------------------------------------
-uint64_t rdtsc();
+static uint64_t rdtsc();
 
 // ---------------------------------------------------------------------------
-uint64_t rdtsc_begin();
+static uint64_t rdtsc_begin();
 
 // ---------------------------------------------------------------------------
-uint64_t rdtsc_end();
+static uint64_t rdtsc_end();
 
 // ---------------------------------------------------------------------------
-void flush(void *p);
+static void flush(void *p);
 
 // ---------------------------------------------------------------------------
-void maccess(void *p);
+static void maccess(void *p);
 
 // ---------------------------------------------------------------------------
-void mfence();
+static void mfence();
 
 // ---------------------------------------------------------------------------
-void nospec();
+static void nospec();
 
 #include <cpuid.h>
 // ---------------------------------------------------------------------------
-unsigned int xbegin();
+static unsigned int xbegin();
 
 // ---------------------------------------------------------------------------
-void xend();
+static void xend();
 
 // ---------------------------------------------------------------------------
-int has_tsx();
+static int has_tsx();
 
 // ---------------------------------------------------------------------------
-void maccess_tsx(void* ptr);
+static void maccess_tsx(void* ptr);
 
 #elif defined(__i386__)
 // ---------------------------------------------------------------------------
@@ -200,7 +200,7 @@ static void perf_init() {
 
 #if defined(__x86_64__)
 // ---------------------------------------------------------------------------
-uint64_t rdtsc() {
+static uint64_t rdtsc() {
   uint64_t a, d;
   asm volatile("mfence");
 #if USE_RDTSCP
@@ -214,7 +214,7 @@ uint64_t rdtsc() {
 }
 
 // ---------------------------------------------------------------------------
-uint64_t rdtsc_begin() {
+static uint64_t rdtsc_begin() {
   uint64_t a, d;
   asm volatile ("mfence\n\t"
     "CPUID\n\t"
@@ -230,7 +230,7 @@ uint64_t rdtsc_begin() {
 }
 
 // ---------------------------------------------------------------------------
-uint64_t rdtsc_end() {
+static uint64_t rdtsc_end() {
   uint64_t a, d;
   asm volatile("mfence\n\t"
     "RDTSCP\n\t"
@@ -246,31 +246,31 @@ uint64_t rdtsc_end() {
 }
 
 // ---------------------------------------------------------------------------
-void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p) : "rax"); }
+static void flush(void *p) { asm volatile("clflush 0(%0)\n" : : "c"(p) : "rax"); }
 
 // ---------------------------------------------------------------------------
-void maccess(void *p) { asm volatile("movq (%0), %%rax\n" : : "c"(p) : "rax"); }
+static void maccess(void *p) { asm volatile("movq (%0), %%rax\n" : : "c"(p) : "rax"); }
 
 // ---------------------------------------------------------------------------
-void mfence() { asm volatile("mfence"); }
+static void mfence() { asm volatile("mfence"); }
 
 // ---------------------------------------------------------------------------
-void nospec() { asm volatile("lfence"); }
+static void nospec() { asm volatile("lfence"); }
 
 // ---------------------------------------------------------------------------
-unsigned int xbegin() {
+static unsigned int xbegin() {
   unsigned status;
   asm volatile(".byte 0xc7,0xf8,0x00,0x00,0x00,0x00" : "=a"(status) : "a"(-1UL) : "memory");
   return status;
 }
 
 // ---------------------------------------------------------------------------
-void xend() {
+static void xend() {
   asm volatile(".byte 0x0f; .byte 0x01; .byte 0xd5" ::: "memory");
 }
 
 // ---------------------------------------------------------------------------
-int has_tsx() {
+static int has_tsx() {
   if (__get_cpuid_max(0, NULL) >= 7) {
     unsigned a, b, c, d;
     __cpuid_count(7, 0, a, b, c, d);
@@ -281,7 +281,7 @@ int has_tsx() {
 }
 
 // ---------------------------------------------------------------------------
-void maccess_tsx(void* ptr) {
+static void maccess_tsx(void* ptr) {
     if (xbegin() == (~0u)) {
         maccess(ptr);
         xend();

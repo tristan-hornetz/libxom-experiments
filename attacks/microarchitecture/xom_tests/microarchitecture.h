@@ -33,6 +33,8 @@ struct xombuf {
     uint8_t locked;
 } typedef _xombuf, *p_xombuf;
 
+void set_processor_affinity(int core_id);
+
 #ifdef __cplusplus
 }
 

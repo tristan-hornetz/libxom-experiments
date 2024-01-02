@@ -1,8 +1,23 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
 #include <unistd.h>
 #include <stdio.h>
+#include <pthread.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+
 #include "microarchitecture.h"
 #include "attacks.h"
+
+extern "C" void set_processor_affinity(int core_id) {
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+
+    pthread_t current_thread = pthread_self();
+    pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
+}
 
 attack_status attack_test::run_test() const {
     char logfile_path[0x100];
@@ -10,6 +25,11 @@ attack_status attack_test::run_test() const {
 
     printf(STR_PEND "Running test '%s'...", name);
     fflush(stdout);
+
+    if(access(OUTPUT_DIR, W_OK | X_OK))
+        mkdir(OUTPUT_DIR, 0755);
+    else if(!access(logfile_path, W_OK))
+        remove(logfile_path);
 
     const auto log_fd = open(logfile_path, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     const auto stdout_back = dup(1), stderr_back = dup(2);
@@ -37,11 +57,13 @@ attack_status attack_test::run_test() const {
 }
 
 extern "C" int ridl_generic_c(uint32_t num_samples, uint32_t success_rate);
+extern "C" uint8_t portsmash_generic(uint32_t num_samples, uint8_t xom);
 
 int main(int argc, char* argv[]){
-    (void) spectre_btb_ca_ip.run_test();
-    (void) spectre_pht_sa_ip.run_test();
-    (void) meltdown.run_test();
+    // (void) spectre_btb_ca_ip.run_test();
+    //(void) spectre_pht_sa_ip.run_test();
+    //(void) meltdown.run_test();
     //ridl_generic_c(100000, 0);
+    portsmash.run_test();
     return 0;
 }

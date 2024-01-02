@@ -6,17 +6,9 @@
 #include <sys/prctl.h>
 
 #include "cacheutils.h"
+#include "microarchitecture.h"
 
 extern void __attribute__((noreturn)) load_magic_value(void* flush_target);
-
-void set_processor_affinity(int core_id) {
-    cpu_set_t cpuset;
-    CPU_ZERO(&cpuset);
-    CPU_SET(core_id, &cpuset);
-
-    pthread_t current_thread = pthread_self();
-    pthread_setaffinity_np(current_thread, sizeof(cpu_set_t), &cpuset);
-}
 
 int ridl_generic_c(uint32_t num_samples, uint32_t success_rate) {
     pid_t pid;
