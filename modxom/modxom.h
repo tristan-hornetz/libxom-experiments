@@ -12,6 +12,7 @@
 #define MODXOM_CMD_LOCK             2
 #define MODXOM_CMD_INIT_SUBPAGES    3
 #define MODXOM_CMD_WRITE_SUBPAGES   4
+#define MODXOM_CMD_GET_SECRET_PAGE  5
 
 #ifndef SUBPAGE_SIZE
 #define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))

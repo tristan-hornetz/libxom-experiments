@@ -26,6 +26,7 @@
 #define MMUEXT_UNMARK_XOM                       22
 #define MMUEXT_CREATE_XOM_SPAGES                23
 #define MMUEXT_WRITE_XOM_SPAGES                 24
+#define MMUEXT_GET_SECRET_PAGE                  25
 
 #define MODXOM_PROC_FILE_NAME                   "xom"
 #define READ_HEADER_STRING                      "        Address:             Size:\n"
@@ -475,8 +476,56 @@ exit:
     return ret;
 }
 
-static int xom_open(struct inode *, struct file *)
-{
+static int xom_get_secret_page(const modxom_cmd* cmd) {
+    unsigned page_index;
+    int status;
+    struct mmuext_op op;
+    pxom_process_entry curr_entry;
+    pxom_mapping curr_mapping;
+
+    // Must be page-aligned
+    if((uintptr_t)cmd->base_addr & ((1 << PAGE_SHIFT) - 1))
+        return -EINVAL;
+    curr_entry = get_process_entry();
+    if(!curr_entry)
+        return -EINVAL;
+
+    curr_mapping = (pxom_mapping) curr_entry->mappings.next;
+    while ((void *)curr_mapping != &(curr_entry->mappings)){
+        if(cmd->base_addr < curr_mapping->uaddr ||
+                cmd->base_addr >= curr_mapping->uaddr + curr_mapping->num_pages * PAGE_SIZE){
+            curr_mapping = (pxom_mapping)curr_mapping->lhead.next;
+            continue;
+        }
+
+        if(curr_mapping->subpage_level)
+            return -EINVAL;
+
+        page_index = (cmd->base_addr - curr_mapping->uaddr) / PAGE_SIZE;
+        if(is_page_locked(curr_mapping, page_index))
+            return -EINVAL;
+
+        op.cmd = MMUEXT_GET_SECRET_PAGE;
+        op.arg1.mfn = virt_to_phys((void*)(curr_mapping->kaddr + (cmd->base_addr - curr_mapping->uaddr))) >> PAGE_SHIFT;
+        op.arg2.src_mfn = 0;
+        #ifdef MODXOM_DEBUG
+        printk(KERN_INFO "[MODXOM] Invoking get_secret_page with dest_mfn 0x%lx\n", op.arg1.mfn);
+        #endif
+        status = HYPERVISOR_mmuext_op(&op, 1, NULL, DOMID_SELF);
+        if(status){
+            #ifdef MODXOM_DEBUG
+            printk(KERN_INFO "[MODXOM] Failed - Status 0x%x\n", status);
+            #endif
+            return -EINVAL;
+        }
+
+        set_lock_status(curr_mapping, page_index, 1);
+        return 0;
+    }
+    return -EINVAL;
+}
+
+static int xom_open(struct inode * __attribute__((unused)) _inode, struct file * __attribute__((unused)) _file) {
     pxom_process_entry new_entry;
 
     mutex_lock(&file_lock);
@@ -492,8 +541,7 @@ static int xom_open(struct inode *, struct file *)
     return 0;
 }
 
-static int xom_release(struct inode *, struct file *)
-{
+static int xom_release(struct inode *, struct file *) {
     int status;
     pxom_process_entry curr_entry;
 
@@ -551,8 +599,7 @@ static int xom_mmap(struct file *f, struct vm_area_struct *vma) {
     return status;
 }
 
-static ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offset)
-{
+static ssize_t xom_read(struct file *f, char __user *user_mem, size_t len, loff_t *offset) {
     ssize_t status = -EINVAL;
     size_t len_reqired = sizeof(READ_HEADER_STRING), index, clen;
     char *dstring;
@@ -612,8 +659,7 @@ exit:
     return status;
 }
 
-static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_t *offset)
-{
+static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len, loff_t *offset) {
     ssize_t ret = -EINVAL;
     modxom_cmd cmd;
 
@@ -650,6 +696,9 @@ static ssize_t xom_write(struct file *f, const char __user *user_mem, size_t len
             break;
         case MODXOM_CMD_INIT_SUBPAGES:
             ret = xom_init_subpages(&cmd);
+            break;
+        case MODXOM_CMD_GET_SECRET_PAGE:
+            ret = xom_get_secret_page(&cmd);
             break;
         default:;
     }

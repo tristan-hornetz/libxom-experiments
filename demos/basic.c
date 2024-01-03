@@ -193,6 +193,43 @@ static void test_subpage_xom(){
     xom_free_all_subpages(subpages);
 }
 
+int test_secret_page(){
+    void (*secret_aes_fun)(void *icb, void* x, void *y, unsigned int num_blocks) = NULL;
+    struct xombuf* xbuf;
+    char X[16] = {0, }, Y[16], ICB[16] = {1, 2, 3 , 4, 5, 6, 7, 8, 0, };
+
+    printf(STR_PEND "==== Testing Secret Page ====\n");
+
+    xbuf = xom_alloc_pages(PAGE_SIZE);
+    if(!xbuf){
+        printf(STR_FAIL "Could not allocate XOM buffer! Errno: %d\n", errno);
+        return -1;
+    }
+    secret_aes_fun = xom_get_secret_page(xbuf);
+    if(!secret_aes_fun){
+        printf(STR_FAIL "Could get secret page! Errno: %d\n", errno);
+        return -1;
+    }
+
+    printf(STR_PEND "Attempting to read secret page directly:\n");
+    try_segv {
+        printf(STR_FAIL "Successfully read %p. This is bad.\n", *(void**)secret_aes_fun);
+    } catch_segv {
+        printf(STR_OK "Caused a segfault, XOM is working!\n");
+    }
+
+    printf(STR_PEND "Attempting to call secret function...\n");
+    try_segv {
+        secret_aes_fun(ICB, X, Y, 1);
+        printf(STR_OK "OK!\n");
+    } catch_segv {
+        printf(STR_FAIL "Caused a segfault! This is bad.\n");
+    }
+
+    xom_free(xbuf);
+    return 0;
+}
+
 // Invoked by the reg_clear test
 static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * context) {
     const static uint64_t r15_cleared_state = 0xbabababababababa;
@@ -255,7 +292,6 @@ int test_reg_clear(void){
         return -1;
 
     // Fill the registers with non-standard values
-
     asm volatile(   "mov $0x123456, %%r15\n"
                     "movaps (%0), %%xmm10\n" 
                 ::  "r"(xmm0)
@@ -303,6 +339,10 @@ int main(int argc, char* argv[]){
 
     // Test subpage-level XOM
     test_subpage_xom();
+    printf("\n\n");
+
+    // Test secret page
+    test_secret_page();
     printf("\n\n");
 
     // Test hypervisor-based register clearing on interrupt

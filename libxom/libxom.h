@@ -92,6 +92,8 @@ void* xom_lock(struct xombuf* buf);
 */
 void xom_free(struct xombuf*);
 
+void *xom_get_secret_page(struct xombuf *buf);
+
 /** 
  * Migrate all executable memory regions that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been

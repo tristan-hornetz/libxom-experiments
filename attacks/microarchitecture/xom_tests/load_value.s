@@ -3,7 +3,11 @@
 .text
 .globl load_magic_value
 load_magic_value:
-    mov 8(%ebp), %edx
+    mov (%rdi), %rax
+    mfence
+    xor %rax, %rax
+    clflush (%rdi)
+    jmp load_magic_value
 load_magic_value_repeat:
     mov $0x01abcdef, %eax
     xor %eax, %eax
