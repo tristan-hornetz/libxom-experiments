@@ -266,7 +266,7 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
             printf(STR_OK "r12 was cleared by the Hypervisor!\n");
         else
             printf(STR_FAIL "r12 is 0x%lx, but should be zero!\n", r12);
-        if(rip)
+        if(!rip)
             printf(STR_OK "rip was cleared by the Hypervisor!\n");
         else
             printf(STR_FAIL "rip is 0x%lx, but should be zero!\n", r12);
