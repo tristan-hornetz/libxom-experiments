@@ -318,9 +318,9 @@ int test_vector_reg_clear(void){
 
     printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
 
-    setup_reg_clear_fault_handler();
+
     try_segv {
-        // Trigger a fault while inside a XOM subpage.
+        // Trigger a fault while inside a marked XOM subpage.
         // This will be handled by the hypervisor, which will
         // overwrite the r15 register and sse/avx registers
         gp_fault();
@@ -361,7 +361,7 @@ int test_full_reg_clear(void){
     if(!gp_fault)
         return -1;
 
-    status = xom_mark_register_clear_subpage(subpages, 0, 0);
+    status = xom_mark_register_clear_subpage(subpages, 1, 0);
     if(status < 0){
         printf(STR_FAIL "Could not mark page for register clearing! Errno: %d\n", -status);
         return -1;
@@ -376,7 +376,6 @@ int test_full_reg_clear(void){
 
     printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
 
-    setup_reg_clear_fault_handler();
     try_segv {
         // Trigger a fault while inside a XOM subpage.
         // This will be handled by the hypervisor, which will
@@ -423,8 +422,13 @@ int main(int argc, char* argv[]){
     test_secret_page();
     printf("\n\n");
 
+    setup_reg_clear_fault_handler();
+
     // Test hypervisor-based vector register clearing on interrupt
     test_vector_reg_clear();
+    printf("\n\n");
+
+    test_full_reg_clear();
     printf("\n\n");
 
     // Restore segfault handler
