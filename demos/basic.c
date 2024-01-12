@@ -262,8 +262,13 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
     else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
+        asm volatile(
+        // Destroy signal handler's stack frame
+        "leave\n"
+        "add $0x8, %%rsp\n"
         // Return to test function
-        asm volatile("jmp *%0" :: "r"(test_full_reg_clear_epilogue));
+        "jmp *%0\n"
+        :: "r"(test_full_reg_clear_epilogue));
     }
     else 
          printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx or 0x%lx!\n", r15, r15_vector_cleared_state, r15_all_cleared_state);
