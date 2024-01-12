@@ -260,13 +260,13 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
 
     if(r15 == r15_vector_cleared_state)
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
-    else if(r15 == r15_vector_cleared_state){
+    else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
         // Return to test function
         asm volatile("jmp *%0" :: "r"(test_full_reg_clear_epilogue));
     }
     else 
-         printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx or !\n", r15, r15_vector_cleared_state, r15_all_cleared_state);
+         printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx or 0x%lx!\n", r15, r15_vector_cleared_state, r15_all_cleared_state);
 
     longjmp(longjmp_buf, 1);
 }
@@ -433,6 +433,8 @@ int main(int argc, char* argv[]){
 
     // Restore segfault handler
     signal(SIGSEGV, old_handler);
+
+    printf("Done!\n");
 
     return 0;
 }
