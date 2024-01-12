@@ -332,6 +332,8 @@ int test_vector_reg_clear(void){
         return -1;
     }
 
+    printf(STR_PEND "We expect r15 and the SSE/AVX registers to be cleared, but the other registers should remain the same\n");
+    printf(STR_PEND "Causing interrupt...\n");
 
     // Fill the registers with non-standard values
     asm volatile(   "mov $0x123456, %%r15\n"
@@ -340,8 +342,7 @@ int test_vector_reg_clear(void){
                 ::  "r"(xmm0)
             );
 
-    printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
-    printf(STR_PEND "We expect r15 and the SSE/AVX registers to be cleared, but the other registers should remain the same\n");
+
 
 
     try_segv {
@@ -392,6 +393,8 @@ int test_full_reg_clear(void){
         return -1;
     }
 
+    printf(STR_PEND "We expect all registers to be cleared.\n");
+    printf(STR_PEND "Causing interrupt...\n");
 
     // Fill the registers with non-standard values
     asm volatile(   "mov $0x123456, %%r15\n"
@@ -400,8 +403,7 @@ int test_full_reg_clear(void){
                 ::  "r"(xmm0)
             );
 
-    printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
-    printf(STR_PEND "We expect all registers to be cleared.\n");
+
 
     try_segv {
         // Trigger a fault while inside a XOM subpage.
