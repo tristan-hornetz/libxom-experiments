@@ -258,8 +258,17 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
         printf(STR_OK "xmm10 was cleared by the Hypervisor!\n");
     }
 
-    if(r15 == r15_vector_cleared_state)
+    if(r15 == r15_vector_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
+        if(r12)
+            printf(STR_OK "r12 was not modified!\n");
+        else
+            printf(STR_FAIL "r12 was cleared, but should not been!\n");
+        if(rip)
+            printf(STR_OK "rip was not modified\n");
+        else
+            printf(STR_FAIL "rip was cleared, but should not been!\n");
+    }
     else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
         if(!r12)
