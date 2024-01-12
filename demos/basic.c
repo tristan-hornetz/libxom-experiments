@@ -263,6 +263,7 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
     else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
         asm volatile(
+        "endsighadnl:\n"
         // Destroy signal handler's stack frame
         "leave\n"
         "add $0x8, %%rsp\n"
