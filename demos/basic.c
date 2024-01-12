@@ -20,8 +20,6 @@
 typedef int (*printf_type) (const char *restrict, ...);
 typedef void (*pprint_something) (const char *restrict, printf_type printf_address);
 
-extern void test_full_reg_clear_epilogue(void);
-
 // Define this code as an array so that we can access it at runtime
 const uint8_t cause_gp_fault[] = {
     0x48, 0x31, 0xc0,   // xor    %rax,%rax
@@ -239,6 +237,8 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
     const static uint64_t r15_vector_cleared_state = 0xbabababababababa;
     const static uint64_t r15_all_cleared_state = 0xdadadadadadadada;
     uint64_t r15 = context->uc_mcontext.gregs[REG_R15];
+    uint64_t r12 = context->uc_mcontext.gregs[REG_R12];
+    uint64_t rip = context->uc_mcontext.gregs[REG_RIP];
     uint64_t __attribute__((aligned(16))) xmm0[2] = {0, 0};
 
     unblock_signal(signum);
@@ -262,14 +262,14 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
     else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
-        /*asm volatile(
-        "endsighadnl:\n"
-        // Destroy signal handler's stack frame
-        "leave\n"
-        "add $0x8, %%rsp\n"
-        // Return to test function
-        "jmp *%0\n"
-        :: "r"(test_full_reg_clear_epilogue));*/
+        if(!r12)
+            printf(STR_OK "r12 was cleared by the Hypervisor!\n");
+        else
+            printf(STR_FAIL "r12 is 0x%lx, but should be zero!\n", r12);
+        if(rip)
+            printf(STR_OK "rip was cleared by the Hypervisor!\n");
+        else
+            printf(STR_FAIL "rip is 0x%lx, but should be zero!\n", r12);
     }
     else 
          printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx or 0x%lx!\n", r15, r15_vector_cleared_state, r15_all_cleared_state);
@@ -347,13 +347,13 @@ int test_full_reg_clear(void){
     size_t (*gp_fault)(void) = NULL;
 
     // Push callee-saved registers RBX, RDI, RSI, R12, R13, R14, and R15 to stack
-    volatile register uint64_t __rbx asm("rbx") = 0;
-    volatile register uint64_t __rdi asm("rdi") = 0;
-    volatile register uint64_t __rsi asm("rsi") = 0;
-    volatile register uint64_t __r12 asm("r12") = 0;
-    volatile register uint64_t __r13 asm("r13") = 0;
-    volatile register uint64_t __r14 asm("r14") = 0;
-    volatile register uint64_t __r15 asm("r15") = 0;
+    volatile register uint64_t __rbx asm("rbx") = 0xabc;
+    volatile register uint64_t __rdi asm("rdi") = 0xabc;
+    volatile register uint64_t __rsi asm("rsi") = 0xabc;
+    volatile register uint64_t __r12 asm("r12") = 0xabc;
+    volatile register uint64_t __r13 asm("r13") = 0xabc;
+    volatile register uint64_t __r14 asm("r14") = 0xabc;
+    volatile register uint64_t __r15 asm("r15") = 0xabc;
 
     printf(STR_PEND "==== Testing Full Register Clear ====\n");
 
@@ -376,6 +376,7 @@ int test_full_reg_clear(void){
 
     // Fill the registers with non-standard values
     asm volatile(   "mov $0x123456, %%r15\n"
+                    "mov $0x123456, %%r12\n"
                     "movaps (%0), %%xmm10\n"
                 ::  "r"(xmm0)
             );
@@ -391,8 +392,7 @@ int test_full_reg_clear(void){
 
     xom_free_subpages(subpages, gp_fault);
 
-    // Tell the compiler that the values in callee-saved registers are still required, so they should not be touched
-    asm volatile("test_full_reg_clear_epilogue:" ::: "rbx", "rdi", "rsi", "r12", "r13", "r14", "r15");
+    asm volatile("" ::: "r15");
     return 0;
 }
 
