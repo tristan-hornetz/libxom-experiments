@@ -263,11 +263,11 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
         if(r12)
             printf(STR_OK "r12 was not modified!\n");
         else
-            printf(STR_FAIL "r12 was cleared, but should not been!\n");
+            printf(STR_FAIL "r12 was cleared, but should not have been!\n");
         if(rip)
             printf(STR_OK "rip was not modified\n");
         else
-            printf(STR_FAIL "rip was cleared, but should not been!\n");
+            printf(STR_FAIL "rip was cleared, but should not have been!\n");
     }
     else if(r15 == r15_all_cleared_state){
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
@@ -303,8 +303,9 @@ int test_vector_reg_clear(void){
     struct xom_subpages* subpages;
     size_t (*gp_fault)(void) = NULL;
 
-    // Tell the compiler to back up r15
+    // Tell the compiler to back up r15 and r12
     volatile register uint64_t __r15 asm("r15") = 0x123;
+    volatile register uint64_t __r12 asm("r12") = 0x123;
 
     printf(STR_PEND "==== Testing Vector Register Clear ====\n");
 
@@ -327,6 +328,7 @@ int test_vector_reg_clear(void){
 
     // Fill the registers with non-standard values
     asm volatile(   "mov $0x123456, %%r15\n"
+                    "mov $0x123456, %%r12\n"
                     "movaps (%0), %%xmm10\n" 
                 ::  "r"(xmm0)
             );
