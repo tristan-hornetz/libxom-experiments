@@ -20,6 +20,8 @@
 typedef int (*printf_type) (const char *restrict, ...);
 typedef void (*pprint_something) (const char *restrict, printf_type printf_address);
 
+extern void test_full_reg_clear_epilogue(void);
+
 // Define this code as an array so that we can access it at runtime
 const uint8_t cause_gp_fault[] = {
     0x48, 0x31, 0xc0,   // xor    %rax,%rax
@@ -234,7 +236,8 @@ int test_secret_page(){
 
 // Invoked by the reg_clear test
 static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * context) {
-    const static uint64_t r15_cleared_state = 0xbabababababababa;
+    const static uint64_t r15_vector_cleared_state = 0xbabababababababa;
+    const static uint64_t r15_all_cleared_state = 0xdadadadadadadada;
     uint64_t r15 = context->uc_mcontext.gregs[REG_R15];
     uint64_t __attribute__((aligned(16))) xmm0[2] = {0, 0};
 
@@ -252,13 +255,18 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
     if(xmm0[0] || xmm0[1]){
         printf(STR_FAIL "xmm10 is (0x%lx, 0x%lx), but should be zero!\n", xmm0[0], xmm0[1]);
     } else {
-        printf(STR_OK "xmm10 was cleared by the Hypervisor!\n", xmm0[0], xmm0[1]);
+        printf(STR_OK "xmm10 was cleared by the Hypervisor!\n");
     }
 
-    if(r15 != r15_cleared_state)
-        printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx!\n", r15, r15_cleared_state);
+    if(r15 == r15_vector_cleared_state)
+        printf(STR_OK "r15 was cleared by the Hypervisor!\n");
+    else if(r15 == r15_vector_cleared_state){
+        printf(STR_OK "r15 was cleared by the Hypervisor!\n");
+        // Return to test function
+        asm volatile("jmp *%0" :: "r"(test_full_reg_clear_epilogue));
+    }
     else 
-        printf(STR_OK "r15 was cleared by the Hypervisor!\n", xmm0[0], xmm0[1]);
+         printf(STR_FAIL "r15 is 0x%lx, but should be 0x%lx or !\n", r15, r15_vector_cleared_state, r15_all_cleared_state);
 
     longjmp(longjmp_buf, 1);
 }
@@ -273,7 +281,7 @@ static void setup_reg_clear_fault_handler(){
 }
 
 
-int test_reg_clear(void){
+int test_vector_reg_clear(void){
     int status;
     uint64_t r15;
     uint64_t __attribute__((aligned(16))) xmm0[2] = {0xabc, 0xdef};
@@ -283,7 +291,7 @@ int test_reg_clear(void){
     // Tell the compiler to back up r15
     volatile register uint64_t __r15 asm("r15") = 0x123;
 
-    printf(STR_PEND "==== Testing Register Clear ====\n");
+    printf(STR_PEND "==== Testing Vector Register Clear ====\n");
 
     subpages = xom_alloc_subpages(PAGE_SIZE);
     if(!subpages){
@@ -325,6 +333,64 @@ int test_reg_clear(void){
     return 0;
 }
 
+int test_full_reg_clear(void){
+    int status;
+    uint64_t r15;
+    uint64_t __attribute__((aligned(16))) xmm0[2] = {0xabc, 0xdef};
+    struct xom_subpages* subpages;
+    size_t (*gp_fault)(void) = NULL;
+
+    // Push callee-saved registers RBX, RDI, RSI, R12, R13, R14, and R15 to stack
+    volatile register uint64_t __rbx asm("rbx") = 0;
+    volatile register uint64_t __rdi asm("rdi") = 0;
+    volatile register uint64_t __rsi asm("rsi") = 0;
+    volatile register uint64_t __r12 asm("r12") = 0;
+    volatile register uint64_t __r13 asm("r13") = 0;
+    volatile register uint64_t __r14 asm("r14") = 0;
+    volatile register uint64_t __r15 asm("r15") = 0;
+
+    printf(STR_PEND "==== Testing Full Register Clear ====\n");
+
+    subpages = xom_alloc_subpages(PAGE_SIZE);
+    if(!subpages){
+        printf(STR_FAIL "Could not allocate subpages! Errno: %d\n", errno);
+        return -1;
+    }
+
+    gp_fault = xom_fill_and_lock_subpages(subpages, sizeof(cause_gp_fault), cause_gp_fault);
+    if(!gp_fault)
+        return -1;
+
+    status = xom_mark_register_clear_subpage(subpages, 0, 0);
+    if(status < 0){
+        printf(STR_FAIL "Could not mark page for register clearing! Errno: %d\n", -status);
+        return -1;
+    }
+
+
+    // Fill the registers with non-standard values
+    asm volatile(   "mov $0x123456, %%r15\n"
+                    "movaps (%0), %%xmm10\n"
+                ::  "r"(xmm0)
+            );
+
+    printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
+
+    setup_reg_clear_fault_handler();
+    try_segv {
+        // Trigger a fault while inside a XOM subpage.
+        // This will be handled by the hypervisor, which will
+        // overwrite the r15 register and sse/avx registers
+        gp_fault();
+    } catch_segv {;}
+
+    xom_free_subpages(subpages, gp_fault);
+
+    // Tell the compiler that the values in callee-saved registers are still required, so they should not be touched
+    asm volatile("test_full_reg_clear_epilogue:" ::: "rbx", "rdi", "rsi", "r12", "r13", "r14", "r15");
+    return 0;
+}
+
 
 int main(int argc, char* argv[]){
     __sighandler_t old_handler;
@@ -357,8 +423,8 @@ int main(int argc, char* argv[]){
     test_secret_page();
     printf("\n\n");
 
-    // Test hypervisor-based register clearing on interrupt
-    test_reg_clear();
+    // Test hypervisor-based vector register clearing on interrupt
+    test_vector_reg_clear();
     printf("\n\n");
 
     // Restore segfault handler
