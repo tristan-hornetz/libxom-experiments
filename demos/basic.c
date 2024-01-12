@@ -4,8 +4,6 @@
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
 #include "libxom.h"
 
 #define RED "\e[0;31m"
@@ -40,11 +38,15 @@ char code_backup[0x100] = {0, };
 // printf and the format string
 void print_something(const char *restrict msg, printf_type printf_address) {
     void** rbp;
+    // r15 may be cleared by the hypervisor on interrupt, so tell the compiler to back it up
+    volatile register void* r15 asm("r15") = 0;
 
     asm volatile ("mov %%rbp, %0" : "=r"(rbp));
 
     // Print the address of this function, and the address of the caller
     printf_address(msg, &print_something, rbp[1]);
+
+    asm volatile("" ::: "r15");
 }
 
 // Signal handler stuff
@@ -278,18 +280,27 @@ int test_reg_clear(void){
     struct xom_subpages* subpages;
     size_t (*gp_fault)(void) = NULL;
 
-    // Tell the compiler to not use %r15
+    // Tell the compiler to back up r15
     volatile register uint64_t __r15 asm("r15") = 0x123;
 
     printf(STR_PEND "==== Testing Register Clear ====\n");
 
     subpages = xom_alloc_subpages(PAGE_SIZE);
-    if(!subpages)
+    if(!subpages){
+        printf(STR_FAIL "Could not allocate subpages! Errno: %d\n", errno);
         return -1;
+    }
 
     gp_fault = xom_fill_and_lock_subpages(subpages, sizeof(cause_gp_fault), cause_gp_fault);
     if(!gp_fault)
         return -1;
+
+    status = xom_mark_register_clear_subpage(subpages, 0, 0);
+    if(status < 0){
+        printf(STR_FAIL "Could not mark page for register clearing! Errno: %d\n", -status);
+        return -1;
+    }
+
 
     // Fill the registers with non-standard values
     asm volatile(   "mov $0x123456, %%r15\n"
@@ -313,6 +324,7 @@ int test_reg_clear(void){
     asm volatile("" ::: "r15");
     return 0;
 }
+
 
 int main(int argc, char* argv[]){
     __sighandler_t old_handler;

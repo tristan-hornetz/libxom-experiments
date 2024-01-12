@@ -13,6 +13,11 @@
 #define MODXOM_CMD_INIT_SUBPAGES    3
 #define MODXOM_CMD_WRITE_SUBPAGES   4
 #define MODXOM_CMD_GET_SECRET_PAGE  5
+#define MODXOM_CMD_MARK_REG_CLEAR   6
+
+#define REG_CLEAR_TYPE_NONE     0
+#define REG_CLEAR_TYPE_VECTOR   1
+#define REG_CLEAR_TYPE_FULL     2
 
 #ifndef SUBPAGE_SIZE
 #define SUBPAGE_SIZE (PAGE_SIZE / (sizeof(uint32_t) << 3))

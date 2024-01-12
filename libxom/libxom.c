@@ -651,6 +651,22 @@ static inline int get_xom_mode_internal() {
     return (int) xom_mode;
 }
 
+static int mark_register_clear_internal(struct xombuf* buf, uint8_t full_clear, size_t page_number) {
+    modxom_cmd cmd = {
+            .cmd = MODXOM_CMD_MARK_REG_CLEAR,
+            .base_addr = (uintptr_t) buf->address + (page_number * PAGE_SIZE),
+            .num_pages = full_clear ? REG_CLEAR_TYPE_FULL : REG_CLEAR_TYPE_VECTOR
+    };
+
+    if(xom_mode != XOM_MODE_SLAT)
+        return -EINVAL;
+
+    if(write(xomfd, &cmd, sizeof(cmd)) < 0)
+        return -errno;
+
+    return 0;
+}
+
 static int install_seccomp_filter() {
     struct sock_filter filter[] = {
             BPF_STMT(BPF_LD | BPF_W | BPF_ABS, (offsetof(struct seccomp_data, arch))),
@@ -712,6 +728,22 @@ void xom_free(struct xombuf *buf) {
 
 void *xom_get_secret_page(struct xombuf *buf) {
     wrap_call(void*, xom_get_secret_page_internal(buf));
+}
+
+int xom_mark_register_clear(struct xombuf *buf, uint8_t full_clear, size_t page_number) {
+    if(page_number * PAGE_SIZE > buf->allocated_size)
+        return -EINVAL;
+
+    wrap_call(int, mark_register_clear_internal(buf, full_clear, page_number));
+}
+
+int xom_mark_register_clear_subpage(struct xom_subpages *subpages, uint8_t full_clear, size_t page_number) {
+    struct xombuf buf = {
+            .address = subpages->address,
+            .allocated_size = (subpages->num_subpages * SUBPAGE_SIZE),
+            .locked = ~0
+    };
+    return xom_mark_register_clear(&buf, full_clear, page_number);
 }
 
 #if (defined(__x86_64__) || defined(_M_X64))

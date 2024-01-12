@@ -103,8 +103,6 @@ void *xom_get_secret_page(struct xombuf *buf);
 */
 int xom_migrate_all_code();
 
-int xom_migrate_all_code_lax();
-
 /** 
  * Migrate the code of all shared libraries that are currently in the address space to XOM.
  * This function can only be called once, and only if no other function from libxom has been
@@ -169,6 +167,10 @@ void reg_clear_area_begin(void);
 void reg_clear_area_leave(void);
 
 int32_t check_reg_clear_magic(void);
+
+int xom_mark_register_clear(struct xombuf *buf, uint8_t full_clear, size_t page_number);
+int xom_mark_register_clear_subpage(struct xom_subpages *subpages, uint8_t full_clear, size_t page_number);
+
 
 #ifdef __cplusplus
 }
