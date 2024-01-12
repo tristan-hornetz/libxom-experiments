@@ -259,17 +259,24 @@ static void clear_reg_handler(int signum, siginfo_t * siginfo, ucontext_t * cont
     }
 
     if(r15 == r15_vector_cleared_state){
+        // Indicates that a vector register clear occurred
+        // The other registers (including RIP) should remain the same
+
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
         if(r12)
             printf(STR_OK "r12 was not modified!\n");
         else
             printf(STR_FAIL "r12 was cleared, but should not have been!\n");
         if(rip)
-            printf(STR_OK "rip was not modified\n");
+            printf(STR_OK "rip was not modified!\n");
         else
             printf(STR_FAIL "rip was cleared, but should not have been!\n");
     }
     else if(r15 == r15_all_cleared_state){
+        // Indicates that a full register clear occurred
+        // The other registers should also be 0
+        // Note that we only check for RIP and R12 here
+
         printf(STR_OK "r15 was cleared by the Hypervisor!\n");
         if(!r12)
             printf(STR_OK "r12 was cleared by the Hypervisor!\n");
@@ -303,9 +310,9 @@ int test_vector_reg_clear(void){
     struct xom_subpages* subpages;
     size_t (*gp_fault)(void) = NULL;
 
-    // Tell the compiler to back up r15 and r12
-    volatile register uint64_t __r15 asm("r15") = 0x123;
-    volatile register uint64_t __r12 asm("r12") = 0x123;
+    // Tell the compiler to back up callee-saved registers r15 and r12 so the values are not lost
+    volatile register uint64_t __r15 asm("r15");
+    volatile register uint64_t __r12 asm("r12");
 
     printf(STR_PEND "==== Testing Vector Register Clear ====\n");
 
@@ -334,6 +341,7 @@ int test_vector_reg_clear(void){
             );
 
     printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
+    printf(STR_PEND "We expect r15 and the SSE/AVX registers to be cleared, but the other registers should remain the same\n");
 
 
     try_segv {
@@ -357,7 +365,7 @@ int test_full_reg_clear(void){
     struct xom_subpages* subpages;
     size_t (*gp_fault)(void) = NULL;
 
-    // Push callee-saved registers RBX, RDI, RSI, R12, R13, R14, and R15 to stack
+    // Push callee-saved registers RBX, RDI, RSI, R12, R13, R14, and R15 to stack so they don't get lost
     volatile register uint64_t __rbx asm("rbx") = 0xabc;
     volatile register uint64_t __rdi asm("rdi") = 0xabc;
     volatile register uint64_t __rsi asm("rsi") = 0xabc;
@@ -393,6 +401,7 @@ int test_full_reg_clear(void){
             );
 
     printf(STR_PEND "Primed registers with non-standard values. Causing interrupt...\n");
+    printf(STR_PEND "We expect all registers to be cleared.\n");
 
     try_segv {
         // Trigger a fault while inside a XOM subpage.
