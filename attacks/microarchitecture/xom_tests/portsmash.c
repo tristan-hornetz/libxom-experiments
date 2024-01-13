@@ -111,7 +111,7 @@ uint8_t portsmash_generic(uint32_t num_samples, uint8_t xom){
 
 
     xbuf = xom_alloc_pages(num_pages * PAGE_SIZE);
-    xom_write(xbuf, port1_victim, num_pages * PAGE_SIZE);
+    xom_write(xbuf, port1_victim, num_pages * PAGE_SIZE, 0);
     port1_victim_ptr = xbuf->address;
     if(xom)
         (void) xom_lock(xbuf);

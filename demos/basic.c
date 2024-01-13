@@ -106,7 +106,7 @@ static void test_xom_buffers(){
     }
 
     // Write into XOM buffer
-    status = xom_write(buf, code_backup, sizeof(code_backup));
+    status = xom_write(buf, code_backup, sizeof(code_backup), 0);
 
     if(status < 0){
         printf(STR_FAIL "Could not write to XOM buffer, errno is %d\n", errno);

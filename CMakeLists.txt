@@ -22,12 +22,11 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/modxom)
 add_subdirectory("libxom")
 add_subdirectory("modxom")
 
-
-
 add_subdirectory(demos)
 add_subdirectory(benchmarks)
 add_subdirectory(attacks)
 
 install(TARGETS xom DESTINATION /usr/lib)
 install(FILES libxom/libxom.h DESTINATION include)
+install(FILES modxom/modxom.h DESTINATION include)
 install(FILES ./xom DESTINATION /usr/bin PERMISSIONS WORLD_READ WORLD_EXECUTE)

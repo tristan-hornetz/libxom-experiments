@@ -56,7 +56,7 @@ benchmark(primes){
             mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
     memcpy(get_primes_noxom, get_primes, PAGE_SIZE);
-    xom_write(primes_xom_buf, get_primes, PAGE_SIZE);
+    xom_write(primes_xom_buf, get_primes, PAGE_SIZE, 0);
     get_primes_xom = xom_lock(primes_xom_buf);
 
     for(i = 0; i < num_repetitions; i++) {
@@ -101,7 +101,7 @@ benchmark(access) {
 
 
     nop_slide[0] = RET;
-    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE);
+    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE, 0);
     access_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom);
 
     fprintf(fp, "access_times_noxom = [\n");
@@ -147,7 +147,7 @@ benchmark(nop_slide) {
 
     memset(nop_slide, NOP, PAGE_SIZE);
     nop_slide[PAGE_SIZE - 1] = RET;
-    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE);
+    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE, 0);
     nop_slide_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom);
 
     fprintf(fp, "nop_slide_times_noxom = [\n");
@@ -193,7 +193,7 @@ benchmark(jumper) {
     for(i = 0; i < segment_size >> PAGE_SHIFT; i++)
         memcpy(&jumper_segment[PAGE_SIZE * i], jumper_link, 0x100);
 
-    xom_write(xom_pages, jumper_segment, segment_size);
+    xom_write(xom_pages, jumper_segment, segment_size, 0);
     base_address = xom_lock(xom_pages);
 
     if(!base_address) {
@@ -249,7 +249,7 @@ benchmark(aes) {
     };
 
     init_counter_mode_function((void*)aes_noxom, &key);
-    xom_write(xom_pages, aes_noxom, PAGE_SIZE);
+    xom_write(xom_pages, aes_noxom, PAGE_SIZE, 0);
     aes_xom = xom_lock(xom_pages);
     if(!aes_xom) {
         xom_free(xom_pages);

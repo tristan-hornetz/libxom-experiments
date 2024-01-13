@@ -1,6 +1,5 @@
 /** \file libxom.h
- * A brief file description.
- * A more elaborated file description.
+ * Main header file for libxom
  */
 
 #ifndef _LIBXOM_H_
@@ -22,18 +21,25 @@
 #define XOM_MODE_PKU            1
 #define XOM_MODE_SLAT           2
 
-#define CLEAR_REG_MAGIC_HI 0x436c6561724d6550 
-#define CLEAR_REG_MAGIC_LO 0x6c65617365212100
 
 #ifdef __cplusplus
+#ifndef restrict
+#define restrict
+#define restrict_
+#endif
 extern "C" {
 #endif
 
 /** 
- * An anonymous struct describing a XOM buffer.
- * To obtain the executable buffer itself, use xom_lock.
+ * An anonymous struct representing a XOM buffer.
+ * To obtain a pointer to the buffer itself, use xom_lock.
 */
 struct xombuf;
+
+/**
+ * An anonymous struct describing a range of XOM subpages.
+ * To obtain a pointer to the subpages themselves, use xom_fill_and_lock_subpages.
+*/
 struct xom_subpages;
 
 
@@ -54,7 +60,9 @@ struct xom_subpages;
 struct xombuf* xom_alloc_pages(size_t size);
 
 /**
- * @returns The current XOM mode. 0 means that XOM is not supported in any capacity
+ * @returns The current XOM mode. 0 means that XOM is not supported in any capacity.
+ *  XOM_MODE_PKU stands for PKU/MPK enforced XOM
+ *  XOM_MODE_SLAT stands for SLAT-enforced XOM
  */
 const int get_xom_mode();
 
@@ -63,8 +71,7 @@ const int get_xom_mode();
  * @param buf The XOM buffer
  * @returns The XOM buffer's size
 */
-size_t xom_get_size(struct xombuf* buf);
-
+size_t xom_get_size(const struct xombuf* buf);
 
 /** 
  * Write into a XOM buffer.
@@ -72,11 +79,12 @@ size_t xom_get_size(struct xombuf* buf);
  * @param dest The XOM buffer to write into
  * @param src The source buffer
  * @param size The number of bytes to copy. The caller must make sure that the 
- *  length of src is >= size
+ *  (<length of src> - offset) is >= size
+ * @param offset The offset to start writing at, in bytes
  * @returns If successful, it returns the number of bytes copied. Otherwise, a
  *  value < 0 is returned and errno is set
 */
-int xom_write(struct xombuf* dest, const void *const src, const size_t size);
+int xom_write(struct xombuf* dest, const void * restrict src, size_t size, size_t offset);
 
 /** 
  * Lock a XOM buffer.
@@ -86,7 +94,8 @@ int xom_write(struct xombuf* dest, const void *const src, const size_t size);
 */
 void* xom_lock(struct xombuf* buf);
 
-/** Free a XOM buffer.
+/**
+ * Free a XOM buffer.
  * 
  * @param buf The XOM buffer to be freed.
 */
@@ -136,7 +145,7 @@ struct xom_subpages* xom_alloc_subpages(size_t size);
  * src. If successful, the function returns a pointer to the start of the memory chunk that
  * was written to.
 */
-void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *const src);
+void* xom_fill_and_lock_subpages(struct xom_subpages* dest, size_t size, const void *restrict src);
 
 /**
  * Free a XOM buffer that was obtained through xom_fill_and_lock_subpages. Note
@@ -160,20 +169,35 @@ int xom_free_subpages(struct xom_subpages* subpages, void* base_address);
 */
 void xom_free_all_subpages(struct xom_subpages* subpages);
 
-int xom_reduce_privileges(void);
+/**
+ * Mark a XOM page for register clearing. Only supported for SLAT-based XOM
+ *
+ * @param buf The XOM buffer containing the target page
+ * @param full_clear If set to 0, only clear %r15 and the SSE/AVX registers on interrupt. If set to 1, every register
+ *                     except for %rpb and %rsp is cleared
+ * @param page_number The page's index within the buffer. Can be computed as (byte_offset / PAGE_SIZE).
+ * @return 0 upon success, a negative error code upon error.
+ */
+int xom_mark_register_clear(const struct xombuf *buf, uint8_t full_clear, size_t page_number);
 
-void reg_clear_area_begin(void);
-
-void reg_clear_area_leave(void);
-
-int32_t check_reg_clear_magic(void);
-
-int xom_mark_register_clear(struct xombuf *buf, uint8_t full_clear, size_t page_number);
-int xom_mark_register_clear_subpage(struct xom_subpages *subpages, uint8_t full_clear, size_t page_number);
+/**
+ * Mark a XOM page reserved for subpage-XOM for register clearing. Only supported for SLAT-based XOM
+ *
+ * @param buf The XOM subpage-array containing the target page
+ * @param full_clear If set to 0, only clear %r15 and the SSE/AVX registers on interrupt. If set to 1, every register
+ *                     except for %rpb and %rsp is cleared
+ * @param page_number The page's index within the subpage-array. Can be computed as (byte_offset_of_subpage / PAGE_SIZE).
+ * @return 0 upon success, a negative error code upon error.
+ */
+int xom_mark_register_clear_subpage(const struct xom_subpages *subpages, uint8_t full_clear, size_t page_number);
 
 
 #ifdef __cplusplus
 }
+#ifdef restrict_
+#undef restrict
+#undef restrict_
+#endif
 #endif
 
 
