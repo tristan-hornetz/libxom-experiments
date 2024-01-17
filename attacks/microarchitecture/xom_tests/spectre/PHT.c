@@ -59,7 +59,7 @@ static uint8_t spectre_pht_sa_ip_test_generic(const uint32_t success_fraction, c
 	if(pipe(pipefd) < 0)
 		return ~0;
 	struct pollfd pipepoll = {pipefd[0],POLLIN | POLLPRI | POLLERR | POLLHUP | POLLNVAL, 0};
-	struct xombuf* xbuf = xom_alloc_pages(PAGE_SIZE);
+	struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
 
 	// Put accessible section into readable memory, and inaccessible section into XOM
 	(void) mmap(((char*)xbuf->address) - PAGE_SIZE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1 , 0);

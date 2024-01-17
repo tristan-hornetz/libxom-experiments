@@ -14,7 +14,7 @@ char *victim_page;
 #define SECRET 0x90
 
 static uint8_t meltdown_xom_internal(uint32_t success_fraction, uint32_t num_samples) {
-  struct xombuf* xbuf = xom_alloc_pages(PAGE_SIZE);
+  struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
   uint32_t success_counter = 0;
 
   pagesize = sysconf(_SC_PAGESIZE);

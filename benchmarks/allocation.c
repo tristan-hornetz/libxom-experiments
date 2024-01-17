@@ -1,12 +1,7 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #include <sys/mman.h>
-#include "libxom-aes-gcm.h"
 #include "benchmark.h"
-#include "libxom.h"
 #include "modxom.h"
 
 extern int32_t xomfd;

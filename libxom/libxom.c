@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include <immintrin.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <sys/auxv.h>
 #include <sys/mman.h>
 #include <stddef.h>
@@ -47,12 +49,14 @@ struct xombuf {
     void *address;
     size_t allocated_size;
     uint8_t locked;
+    uint8_t xom_mode;
 } typedef _xombuf, *p_xombuf;
 
 struct xom_subpages {
     void *address;
     size_t num_subpages;
     int8_t references;
+    uint8_t xom_mode;
     uint32_t *lock_status;
 } typedef _xom_subpages, *p_xom_subpages;
 
@@ -65,13 +69,19 @@ struct {
 } typedef text_region;
 
 int32_t xomfd = -1;
+
+
+static jmp_buf reg_clear_recovery_buffer;
+static pthread_mutex_t full_reg_clear_lock;
+static pthread_mutexattr_t full_reg_clear_lock_attr;
+static __sighandler_t old_sig_handler;
+
 static volatile uint8_t initialized = 0;
 static pthread_mutex_t lib_lock;
 static unsigned int xom_mode = XOM_MODE_UNSUPPORTED;
 static void *xom_base_addr = NULL;
 
 static void *(*dlopen_original)(const char *, int) = NULL;
-
 static void *(*dlmopen_original)(Lmid_t, const char *, int) = NULL;
 
 #define wrap_call(T, F) {           \
@@ -80,6 +90,59 @@ static void *(*dlmopen_original)(Lmid_t, const char *, int) = NULL;
     r = F;                          \
     __libxom_epilogue();            \
     return r;                       \
+}
+
+static inline void unblock_signal(const int signum) {
+    sigset_t sigs;
+    sigemptyset(&sigs);
+    sigaddset(&sigs, signum);
+    sigprocmask(SIG_UNBLOCK, &sigs, NULL);
+}
+
+static void full_reg_clear_handler(int signum) {
+    unblock_signal(signum);
+    longjmp(reg_clear_recovery_buffer, 1);
+}
+
+int expect_full_reg_clear__(void) {
+    int lock_status;
+
+    // Make sure that all callee-saved registers are backed up to memory
+    volatile register uintptr_t r12 asm("r12") = 0;
+    volatile register uintptr_t r13 asm("r13") = r12;
+    volatile register uintptr_t r14 asm("r14") = r13;
+    volatile register uintptr_t r15 asm("r15") = r14;
+    volatile register uintptr_t rbx asm("rbx") = r15;
+    volatile register uintptr_t rdi asm("rdi") = rbx;
+    volatile register uintptr_t rsi asm("rsi") = rdi;
+    r12 = rsi;
+
+    lock_status = pthread_mutex_lock(&full_reg_clear_lock);
+
+    if(lock_status == EDEADLK){
+        if(xomfd >= 0){
+            signal(SIGSEGV, old_sig_handler);
+            pthread_mutex_unlock(&full_reg_clear_lock);
+        }
+        return 0;
+    }
+    if(lock_status)
+        return 0;
+
+    if(xomfd >= 0){
+        old_sig_handler = signal(SIGSEGV, full_reg_clear_handler);
+        setjmp(reg_clear_recovery_buffer);
+    }
+
+    return 1;
+}
+
+static uint8_t is_pku_supported(void) {
+    unsigned long a, b, c, d;
+
+    __cpuid_count(7, 0, a, b, c, d);
+
+    return (uint8_t) (c >> 3) & 1;
 }
 
 static inline void __libxom_prologue() {
@@ -382,6 +445,7 @@ static p_xombuf xomalloc_page_internal(size_t size) {
 
     ret->allocated_size = size;
     ret->locked = 0;
+    ret->xom_mode = (uint8_t) xom_mode;
     return ret;
 
     fail:
@@ -420,7 +484,7 @@ static void *xom_lock_internal(struct xombuf *buf) {
     if (buf->locked)
         return buf->address;
 
-    if (xomfd < 0) {
+    if (buf->xom_mode == XOM_MODE_PKU) {
         if (mprotect(buf->address, SIZE_CEIL(buf->allocated_size), PROT_EXEC) < 0)
             return NULL;
         buf->locked = 1;
@@ -452,7 +516,7 @@ static void xom_free_internal(struct xombuf *buf) {
     if (!buf)
         return;
 
-    if (xomfd < 0) {
+    if (buf->xom_mode == XOM_MODE_PKU) {
         munmap(buf->address, SIZE_CEIL(buf->allocated_size));
         free(buf);
         return;
@@ -612,6 +676,7 @@ static void xom_free_all_subpages_internal(struct xom_subpages *subpages) {
                 .address = subpages->address,
                 .allocated_size = subpages->num_subpages * SUBPAGE_SIZE,
                 .locked = 1,
+                .xom_mode = subpages->xom_mode,
         };
         xom_free_internal(xbuf);
     }
@@ -636,6 +701,25 @@ static inline int get_xom_mode_internal() {
     return (int) xom_mode;
 }
 
+static int set_xom_mode_internal(const int new_xom_mode) {
+    if(new_xom_mode == xom_mode)
+        return 0;
+    switch (new_xom_mode) {
+        case XOM_MODE_SLAT:
+            if(xomfd <= 0)
+                return -1;
+            xom_mode = XOM_MODE_SLAT;
+            return 0;
+        case XOM_MODE_PKU:
+            if(!is_pku_supported())
+                return -1;
+            xom_mode = XOM_MODE_PKU;
+            return 0;
+        default:;
+    }
+    return -1;
+}
+
 static int mark_register_clear_internal(const struct xombuf* buf, uint8_t full_clear, size_t page_number) {
     modxom_cmd cmd = {
             .cmd = MODXOM_CMD_MARK_REG_CLEAR,
@@ -653,7 +737,7 @@ static int mark_register_clear_internal(const struct xombuf* buf, uint8_t full_c
 }
 
 
-struct xombuf *xom_alloc_pages(size_t size) {
+struct xombuf *xom_alloc(size_t size) {
     wrap_call(struct xombuf*, xomalloc_page_internal(size));
 }
 
@@ -737,8 +821,12 @@ void xom_free_all_subpages(struct xom_subpages *subpages) {
     __libxom_epilogue();
 }
 
-const int get_xom_mode() {
+int get_xom_mode() {
     wrap_call(int, get_xom_mode_internal());
+}
+
+int set_xom_mode(const int new_xom_mode) {
+    wrap_call(int, set_xom_mode_internal(new_xom_mode));
 }
 
 #if (defined(__x86_64__) || defined(_M_X64))
@@ -754,15 +842,6 @@ static inline void install_dlopen_hook(void) {
 
 #endif
 
-static uint8_t is_pku_supported(void) {
-    unsigned long a, b, c, d;
-
-    __cpuid_count(7, 0, a, b, c, d);
-
-    return (uint8_t) (c >> 3) & 1;
-}
-
-
 __attribute__((constructor))
 void initialize_libxom(void) {
     char **envp = __environ;
@@ -774,6 +853,11 @@ void initialize_libxom(void) {
     pthread_mutex_init(&lib_lock, NULL);
     initialized = 1;
     pthread_mutex_lock(&lib_lock);
+
+    pthread_mutexattr_init(&full_reg_clear_lock_attr);
+    pthread_mutexattr_settype(&full_reg_clear_lock_attr, PTHREAD_MUTEX_ERRORCHECK);
+    pthread_mutex_init(&full_reg_clear_lock, &full_reg_clear_lock_attr);
+
 
     xomfd = open("/proc/xom", O_RDWR);
     if (xomfd >= 0) {

@@ -96,7 +96,7 @@ static uint8_t spectre_btb_ca_ip_test_fun_generic(const attack_test & config, bo
   Fish* fish = new Fish();
   Bird* bird = new Bird(); // contains secret
 
-  xbuf = xom_alloc_pages(PAGE_SIZE);
+  xbuf = xom_alloc(PAGE_SIZE);
   mmap(static_cast<uint8_t *>(xbuf->address) + PAGE_SIZE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   mmap(static_cast<uint8_t *>(xbuf->address) - PAGE_SIZE, PAGE_SIZE, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   // Copy Bird into new buffer so that the vtable pointers are readable, but the stack section is not

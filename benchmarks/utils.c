@@ -16,6 +16,8 @@ static char cpu_ident[49] = {0, };
 unsigned use_rdtscp, cache_line_size;
 char* output_directory = DEFAULT_OUTPUT_DIRECTORY;
 
+static uint32_t tsc_denominator = 0, tsc_numerator = 0, tsc_crystal_frequency = 0;
+
 static void get_cpu_ident(char o[49]){
     uint64_t a, b, c, d;
     uint32_t* out = (uint32_t*) o;
@@ -90,7 +92,10 @@ FILE* open_benchmark_file(const char* restrict name) {
         fprintf(ret, "_COMPILER = \"%s %d.%d.%d\"\n", COMPILER_NAME, COMPILER_MAJOR, COMPILER_MINOR, COMPILER_PATCH);
         fprintf(ret, "_CPU = \"%s\"\n", cpu_ident);
         fprintf(ret, "_OS = \"%s\"\n", os_version);
-        fprintf(ret, "_XOM_MODE = \"%u\"\n", get_xom_mode());
+        fprintf(ret, "_XOM_MODE = %u\n", get_xom_mode());
+        fprintf(ret, "_TSC_DENOMINATOR = 0x%x\n", tsc_denominator);
+        fprintf(ret, "_TSC_NUMERATOR= 0x%x\n", tsc_numerator);
+        fprintf(ret, "_TSC_CRYSTAL_FREQUENCY = 0x%x\n", tsc_crystal_frequency);
 
         fprintf(ret, "\n");
     }
@@ -106,6 +111,8 @@ static void set_processor_affinity(void) {
 }
 
 int init_utils(void){
+    uintptr_t _d;
+
     od_len = strlen(output_directory);
     use_rdtscp = is_rdtscp_supported();
     cache_line_size = get_cache_line_size();
@@ -113,6 +120,10 @@ int init_utils(void){
     get_linux_version(&os_version);
     prepare_output_dir();
     set_processor_affinity();
+
+    // Get TSC information so that we can durations in seconds
+    __cpuid(0x15, tsc_denominator, tsc_numerator, tsc_crystal_frequency, _d);
+
     if(!use_rdtscp)
         printf(STR_WARN "RDTSCP is not supported on this system!\n");
     if(check_clock_resolution() < 0){

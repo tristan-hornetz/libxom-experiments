@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
-#include <sys/stat.h>
-#include <unistd.h>
 #include <sys/mman.h>
 #include <sched.h>
 #include <math.h>
@@ -11,8 +8,7 @@
 #include "benchmark.h"
 #include "libxom.h"
 
-#define NUM_PRIMES 1000000
-#define MAX_PRIME 15485863
+#define NUM_PRIMES 100000
 
 extern void jumper_link(void);
 extern void jumper_fun(void* base_address, uint16_t seed, uintptr_t num_jumps);
@@ -50,7 +46,7 @@ benchmark(primes){
     unsigned i;
     uint64_t timer;
     volatile void (*get_primes_xom)(uint32_t primes[], double (*)(double));
-    struct xombuf* primes_xom_buf = xom_alloc_pages(PAGE_SIZE);
+    struct xombuf* primes_xom_buf = xom_alloc(PAGE_SIZE);
     uint64_t times[num_repetitions];
     volatile void (*get_primes_noxom)(uint32_t primes[], double (*)(double)) =
             mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -94,7 +90,7 @@ benchmark(access) {
     const static unsigned num_repetitions = 1000, num_rounds = 100;
     unsigned i, j;
     char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    struct xombuf* nop_slide_xom = xom_alloc_pages(PAGE_SIZE);
+    struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE);
     void (*access_fun)(void) = ((void (*)(void))nop_slide);
     void (*access_xom_fun)(void);
     uint64_t times[num_repetitions];
@@ -139,7 +135,7 @@ benchmark(nop_slide) {
     const static unsigned num_repetitions = 1000, num_rounds = 100;
     unsigned i, j;
     char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    struct xombuf* nop_slide_xom = xom_alloc_pages(PAGE_SIZE);
+    struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE);
     void (*nop_slide_fun)(void) = ((void (*)(void))nop_slide);
     void (*nop_slide_xom_fun)(void);
     uint64_t times[num_repetitions];
@@ -186,7 +182,7 @@ benchmark(jumper) {
     uint64_t timer;
     uint64_t times[num_repetitions];
     uint8_t* jumper_segment = mmap(NULL, segment_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    struct xombuf* xom_pages =  xom_alloc_pages(segment_size);
+    struct xombuf* xom_pages = xom_alloc(segment_size);
     void* base_address;
     unsigned i;
 
@@ -233,7 +229,7 @@ benchmark(aes) {
     aes_uint128 iv = {.u64 = {0xcafe, 0xbabe}}, key = {.u64 = {0xdead, 0xbeef}}, tag = {.u64 = {0, 0}};
     gctr_fun aes_noxom = (void*) mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     gctr_fun aes_xom;
-    struct xombuf* xom_pages =  xom_alloc_pages(PAGE_SIZE);
+    struct xombuf* xom_pages = xom_alloc(PAGE_SIZE);
     char* enc_target = aligned_alloc(PAGE_SIZE, 2 * PAGE_SIZE);
     unsigned i;
     aes_gcm_context context = {

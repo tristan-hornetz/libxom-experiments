@@ -21,6 +21,10 @@
 #define XOM_MODE_PKU            1
 #define XOM_MODE_SLAT           2
 
+/**
+ * A code block initialized with this marco repeats when the registers are cleared
+ */
+#define expect_full_register_clear while ( expect_full_reg_clear__() )
 
 #ifdef __cplusplus
 #ifndef restrict
@@ -42,6 +46,10 @@ struct xombuf;
 */
 struct xom_subpages;
 
+/**
+ * Do not use directly. Use the expect_full_reg_clear macro instead.
+ */
+int expect_full_reg_clear__(void);
 
 /** 
  * Allocate a XOM buffer.
@@ -57,14 +65,23 @@ struct xom_subpages;
  *  This is not the address of the executable memory region itself, which can be 
  *  obtained with xom_lock.
  */
-struct xombuf* xom_alloc_pages(size_t size);
+struct xombuf* xom_alloc(size_t size);
 
 /**
  * @returns The current XOM mode. 0 means that XOM is not supported in any capacity.
  *  XOM_MODE_PKU stands for PKU/MPK enforced XOM
  *  XOM_MODE_SLAT stands for SLAT-enforced XOM
  */
-const int get_xom_mode();
+int get_xom_mode();
+
+/**
+ * Change the type of XOM used to allocate XOM buffers
+ *
+ * @param new_xom_mode The new XOM mode. Can either be XOM_MODE_SLAT or XOM_MODE_PKU
+ *
+ * @returns 0 if successful, -1 if the specified XOM mode is not supported
+ */
+int set_xom_mode(int new_xom_mode);
 
 /** 
  * Get the size of a XOM buffer
