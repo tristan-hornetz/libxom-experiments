@@ -216,8 +216,10 @@ static text_region *explore_text_regions() {
 
     // We need this buffer until it was used once, which may be never
     regions = malloc(sizeof(*regions) * (count + 1));
-    if (!regions)
+    if (!regions) {
+        fclose(maps);
         return NULL;
+    }
 
     count = 0;
     while (getline(&line, &len, maps) > 0) {
@@ -857,7 +859,6 @@ void initialize_libxom(void) {
     pthread_mutexattr_init(&full_reg_clear_lock_attr);
     pthread_mutexattr_settype(&full_reg_clear_lock_attr, PTHREAD_MUTEX_ERRORCHECK);
     pthread_mutex_init(&full_reg_clear_lock, &full_reg_clear_lock_attr);
-
 
     xomfd = open("/proc/xom", O_RDWR);
     if (xomfd >= 0) {
