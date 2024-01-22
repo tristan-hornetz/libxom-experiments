@@ -874,10 +874,12 @@ void initialize_libxom(void) {
     while (*envp) {
         if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_ALL)) {
             migrate_all_code_internal();
+            install_dlopen_hook();
             break;
         }
         if (strstr(*envp, LIBXOM_ENVVAR "=" LIBXOM_ENVVAR_LOCK_LIBS)) {
             migrate_shared_libraries_internal();
+            install_dlopen_hook();
             break;
         }
         envp++;
@@ -889,7 +891,6 @@ void initialize_libxom(void) {
 
 #if (defined(__x86_64__) || defined(_M_X64))
     xom_base_addr = (void *) (XOM_BASE_ADDRESS + ((rval << PAGE_SHIFT) & ~(0xff0000000000)));
-    install_dlopen_hook();
 #else
     xom_base_addr = (void*) (XOM_BASE_ADDRESS + ((rval << PAGE_SHIFT) & ~(0xff000000ul)));
 #endif
