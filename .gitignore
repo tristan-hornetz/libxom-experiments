@@ -5,4 +5,5 @@ test*.c
 libxom/html
 libxom/latex
 cmake-build-debug
+venv
 .*
