@@ -8,12 +8,303 @@ class ProcessorState:
         self.memory = memory
 
 
-states = [
-    ProcessorState({"rax": 0, "rbx": 0}, {"xmm0": [0, 0]}, {0: 0, 1: 0}),
+class ProcessorConstraints:
+    def __init__(self, regs: dict, fpregs: dict, memory: dict) -> None:
+        self.regs = regs
+        self.fpregs = fpregs
+        self.memory = memory
+
+
+states_and = [
+    ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x1,
+            "rcx": 0x7ffe0e8bcf11,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd301c,
+            "cs": 0x33,
+            "eflags": 0x206,
+            "rsp": 0x7ffe0e8bce80,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcf50: 0x0,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bce88: 0x42a5ebfd3018,
+            0x7ffe0e8bcf70: 0x1,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf11: 0x7900000000000000,
+            0x7ffe0e8bce80: 0x42a5ebfd3018,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bce90: 0x42a5ebfd3018,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+        }, ),
+    ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x7900000000000001,
+            "rcx": 0x7ffe0e8bcf11,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd301f,
+            "cs": 0x33,
+            "eflags": 0x202,
+            "rsp": 0x7ffe0e8bce80,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcf50: 0x0,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bce88: 0x42a5ebfd3018,
+            0x7ffe0e8bcf70: 0x1,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf11: 0x7900000000000000,
+            0x7ffe0e8bce80: 0x42a5ebfd3018,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bce90: 0x42a5ebfd3018,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+        }, )
 ]
 
+states_ret = [
+ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x7900000000000001,
+            "rcx": 0x7ffe0e8bcf21,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3026,
+            "cs": 0x33,
+            "eflags": 0x206,
+            "rsp": 0x7ffe0e8bce80,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcf50: 0x0,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bce88: 0x42a5ebfd3018,
+            0x7ffe0e8bcf70: 0x1,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf21: 0x7900000000000001,
+            0x7ffe0e8bce90: 0x42a5ebfd3018,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bce80: 0x42a5ebfd3018,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+        }, ),
+    ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x7900000000000001,
+            "rcx": 0x7ffe0e8bcf21,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3018,
+            "cs": 0x33,
+            "eflags": 0x206,
+            "rsp": 0x7ffe0e8bce88,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcf50: 0x0,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bce88: 0x42a5ebfd3018,
+            0x7ffe0e8bcf70: 0x1,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf21: 0x7900000000000001,
+            0x7ffe0e8bce90: 0x42a5ebfd3018,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+        }, )
+]
 
-def init_registers(s: Solver, id) -> dict:
+qword_reg_names = [
+    "r15",
+    "r14",
+    "r13",
+    "r12",
+    "rbp",
+    "rbx",
+    "r11",
+    "r10",
+    "r9",
+    "r8",
+    "rax",
+    "rcx",
+    "rdx",
+    "rsi",
+    "rdi",
+    "rip",
+    "rsp"
+]
+
+def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
     # define registers
     regs = {
         # QWORD
@@ -152,15 +443,542 @@ def init_registers(s: Solver, id) -> dict:
     s.add(((regs["eflags"] >> 9) & 1) == ZeroExt(31, regs["if"]))
     s.add(((regs["eflags"] >> 10) & 1) == ZeroExt(31, regs["df"]))
     s.add(((regs["eflags"] >> 11) & 1) == ZeroExt(31, regs["of"]))
-    s.add(((regs["eflags"] >> 21) & 1) == ZeroExt(31, regs["if"]))
+    s.add(((regs["eflags"] >> 21) & 1) == ZeroExt(31, regs["id"]))
 
-    return regs
+    for name, v in regs.items():
+        if name not in processor_state.regs.keys():
+            continue
+        s.add(v == processor_state.regs[name])
 
+    memory = dict()
+
+    for address, value in processor_state.memory.items():
+        b = False
+        # Don't model overlapping addresses
+        for address2, _ in processor_state.memory.items():
+            if address < address2 < (address + 8):
+                b = True
+                break
+        if b:
+            continue
+        b = BitVec(f"{id}_{hex(address)}", 64)
+        memory[address] = b
+        s.add(b == value)
+
+    return ProcessorConstraints(regs, {}, memory)
+
+'''    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE8, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE16, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE32, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE64, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::INTEGER, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE8, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE16, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE32, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE64, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::INTEGER, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE8, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE16, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE32, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE64, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::INTEGER, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE8, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE16, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE32, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE64, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, %s",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::INTEGER, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "(%s), %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_DWORD, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "(%s), %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_WORD, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "(%s), %s",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_HWORD, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "(%s), %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_WORD, },
+        4
+    },
+    (instruction) {
+        "ADD",
+        "(%s), %s",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_HWORD, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_DWORD, },
+        4
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_HWORD, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::SSE_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX512_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX512_BITMASK, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE8, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE16, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE32, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE64, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_QWORD, parameter_type::INTEGER, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_HWORD, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::SSE_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX512_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX512_BITMASK, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE8, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE16, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE32, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE64, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_DWORD, parameter_type::INTEGER, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::GP_REGISTER_HWORD, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::SSE_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX512_REGISTER, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX512_BITMASK, },
+        3
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE8, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE16, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE32, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE64, },
+        8
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_WORD, parameter_type::INTEGER, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::SSE_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX512_REGISTER, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX512_BITMASK, },
+        2
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE8, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE16, },
+        6
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE32, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE64, },
+        7
+    },
+    (instruction) {
+        "ADD",
+        "%s, (%s)",
+        2,
+        {parameter_type::GP_REGISTER_HWORD, parameter_type::INTEGER, },
+        6
+    },
+'''
+
+mnemonics = [
+    "AND",
+    "RET",
+]
+
+
+def build_operand():
+    pass
+
+def model_add(s: Solver, mnemonic, instruction_size, pre_regs: dict, post_regs:dict, pre_absolute, post_absolute):
+    s.add(Implies(mnemonic == "AND", And(instruction_size > 2, instruction_size <= 8, instruction_size != 5)))
+
+
+
+# The ret instruction
+def model_ret(s: Solver, mnemonic, instruction_size, pre: ProcessorConstraints, post: ProcessorConstraints, pre_absolute, post_absolute):
+    if post_absolute.regs["rip"] in pre_absolute.memory.values() and pre_absolute.regs["rsp"] in pre.memory.keys():
+        # New %rip must be old (%rsp)
+        s.add(Implies(mnemonic == "RET", post.regs["rip"] == pre.memory[pre_absolute.regs["rsp"]]))
+        # New %rsp must be increased by register size
+        s.add(Implies(mnemonic == "RET", post.regs["rsp"] == pre.regs["rsp"] + 8))
+        # All remaining registers, including eflags, must stay the same
+        for n in qword_reg_names + ["eflags"]:
+            if n not in ["rsp", "rip"]:
+                s.add(Implies(mnemonic == "RET", post.regs[n] == pre.regs[n]))
+        # There must be no changes to memory
+        for address, value in pre.memory.items():
+            if address in post.memory.keys():
+                s.add(Implies(mnemonic == "RET", post.memory[address] == value))
+    else:
+        s.add(mnemonic != "RET")
+
+
+
+states = states_and
 
 def init_solver():
     solver = Solver()
-    init_registers(solver, "")
+    pre = init_registers(solver, states[0], "pre")
+    post = init_registers(solver, states[1], "post")
+
+    mnemonic = String('mnemonic')
+    solver.add(Or(*([mnemonic == m for m in mnemonics])))
+    instruction_size = BitVec('instrucion_size', 64)
+    solver.add(instruction_size == post.regs["rip"] - pre.regs["rip"])
+
+    model_add(solver, mnemonic, instruction_size, pre, post, states[0], states[1])
+    model_ret(solver, mnemonic, instruction_size, pre, post, states[0], states[1])
+
+    if solver.check() == sat:
+        print(solver.model()[mnemonic])
+    else:
+        print("unsat")
 
 
 if __name__ == "__main__":
     init_solver()
+
