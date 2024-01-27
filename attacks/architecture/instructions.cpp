@@ -334,9 +334,8 @@ static bool test_instance_emu(uc_engine* uc, uc_err& err, ks_engine* ks, ks_err&
 
     // Assemble instruction
     assemble(instance, ks, kerr, &encode, &size, pre.regs.rip);
-    if(!encode) {
+    if(!encode)
         return false;
-    }
 
     uc_reg_write(uc, UC_X86_REG_RIP, &pre.regs.rip);
     //uc_context_save(uc, context_backup);
@@ -349,40 +348,43 @@ static bool test_instance_emu(uc_engine* uc, uc_err& err, ks_engine* ks, ks_err&
     copy_state_to_emulator(uc, pre);
 
     // Write instruction instance to emulator memory
-    if(uc_mem_write(uc, pre.regs.rip, encode, size) != UC_ERR_OK)
+    if(uc_mem_write(uc, pre.regs.rip, encode, size) != UC_ERR_OK){
+        printf("Write\n");
         goto exit;
-    if(uc_mem_write(uc, pre.regs.rip + size, nop, sizeof(nop)) != UC_ERR_OK)
+    }
+    if(uc_mem_write(uc, pre.regs.rip + size, nop, sizeof(nop)) != UC_ERR_OK){
+        printf("Write\n");
         goto exit;
+    }
 
 
 
-    /*if((pre.regs.rip & 0xff) == 0x10){
+    if((pre.regs.rip & 0xff) == 0x10){
         if(strcmp(instance.instr.mnemonic,"DEC") == 0 && strcmp(instance.parameters[0]->c_str(),"%rdi") == 0) {
-            uintptr_t rrip;
+
             printf("HIT\n");
             printf("%02x %02x %02x\n", encode[0], encode[1], encode[2]);
             uc_reg_write(uc, UC_X86_REG_RIP, &pre.regs.rip);
 
             //uc_hook_add(uc, &uh_trap2, UC_HOOK_CODE, reinterpret_cast<void *>(emu_hook), NULL, 0, ~0ul);
             //uc_hook_add(uc, &uh_trap, UC_HOOK_INTR, reinterpret_cast<void *>(hook_intr), NULL, 0, ~0ul);
-            err = uc_emu_start(uc, pre.regs.rip, ~0ul, 0, 0);
+
+            err = uc_emu_start(uc, pre.regs.rip, ~0ul, 0, 1);
             printf("%d\n", err);
             recover_register_state(uc, &emulated.regs, &emulated.fpregs);
             recover_memory_state_emu(uc, emulated);
-            uc_reg_read(uc, UC_X86_REG_RIP, &rrip);
+
             if(regs_eq(emulated, post))
                 printf("regs good!\n");
             else
-                printf("%llx, %llx, %llx, %llx\n", pre.regs.rip, post.regs.rip, emulated.regs.rip, rrip);
+                printf("%llx, %llx, %llx\n", pre.regs.rip, post.regs.rip, emulated.regs.rip);
 
             exit(0);
         }
-    }*/
-
-    
+    }
 
     // Start emulation
-    err = uc_emu_start(uc, pre.regs.rip, ~0ul, 0, 0);
+    err = uc_emu_start(uc, pre.regs.rip, ~0ul, 0, 1);
     /*size = 0;
     uc_mem_regions(uc, &regions, reinterpret_cast<uint32_t *>(&size));
     printf("rip: %llx\n", pre.regs.rip);
@@ -412,12 +414,19 @@ static bool test_instance_emu(uc_engine* uc, uc_err& err, ks_engine* ks, ks_err&
     //printf("\r%s %s: %d / %u                      ", instance.instr.mnemonic, instance.instr.encoding, inc_counter, ninces);
 
     if(err != UC_ERR_OK) {
+        fflush(stdout);
         goto exit;
     }
 
+
+    /*printf("Emu good %llx, %llx, %llx, %s\n", pre.regs.rip, post.regs.rip, emulated.regs.rip,
+           post.regs.rip == emulated.regs.rip ? "true" : "false");
+    */
+
     // Compare to what actually happened on hardware
-    if(!regs_eq(emulated, post))
+    if(post.regs.rip != emulated.regs.rip)
         goto exit;
+
 
     /*if(memcmp(&post.regs, &emulated.regs, sizeof(emulated.regs)) != 0)
         goto exit;*/
@@ -742,7 +751,7 @@ void* test_instruction_thread(void*){
             uc_open(UC_ARCH_X86, UC_MODE_64, &uc);
             for(const auto& m: maps)
                 uc_mem_map(uc, m.first, m.second - m.first, UC_PROT_ALL);
-            uc_hook_add(uc, &ltrap, UC_HOOK_CODE, reinterpret_cast<void *>(emu_hook), NULL, 0, ~0ul);
+            //uc_hook_add(uc, &ltrap, UC_HOOK_CODE, reinterpret_cast<void *>(emu_hook), NULL, 0, ~0ul);
         }
 
         auto plausible = test_instruction(uc, err, ks, kerr, pre, post, instr);
