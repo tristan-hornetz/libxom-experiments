@@ -23,4 +23,4 @@ get_fibonacci3:
     // Epilogue
     mov %rax, (%rcx)
     ret
-    add $0x10, %cl
+    decb (%rax)
