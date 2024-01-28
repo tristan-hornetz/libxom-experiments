@@ -94,6 +94,7 @@ parameter_types = [
     "IMMEDIATE8",
 ]
 
+
 class ProcessorState:
     def __init__(self, regs: dict, fpregs: dict, memory: dict) -> None:
         self.regs = regs
@@ -108,8 +109,6 @@ class ProcessorConstraints:
         self.memory = memory
 
 
-
-
 class Operand:
     def __init__(self, s: Solver, id):
         self.type = String(f"{id}_type")
@@ -121,9 +120,8 @@ class Operand:
 
         # Constrain width of immediates
         s.add(Implies(self.type == "IMMEDIATE8", self.immediate < 0x100))
-        s.add(Implies(self.type == "IMMEDIATE16", And(self.immediate < 0x10000, self.immediate >= 0x100)))
-        s.add(Implies(self.type == "IMMEDIATE32", And(self.immediate < 0x100000000, self.immediate >= 0x10000)))
-        s.add(Implies(self.type == "IMMEDIATE64", self.immediate >= 0x100000000))
+        s.add(Implies(self.type == "IMMEDIATE16", And(self.immediate < 0x10000)))
+        s.add(Implies(self.type == "IMMEDIATE32", And(self.immediate < 0x100000000)))
 
         # Constrain register names
         s.add(Implies(self.type == "GP_REGISTER_QWORD", Or(*(self.register == r for r in qword_reg_names))))
@@ -136,7 +134,8 @@ class Operand:
         s.add(Implies(Or(*(self.type == r for r in ["IMMEDIATE8", "IMMEDIATE16", "IMMEDIATE32", "IMMEDIATE64"])),
                       self.register == "rax"))
 
-        s.add(Implies(Or(*(self.type == r for r in ["GP_REGISTER_QWORD", "GP_REGISTER_DWORD", "GP_REGISTER_WORD", "GP_REGISTER_HWORD"])),
+        s.add(Implies(Or(*(self.type == r for r in
+                           ["GP_REGISTER_QWORD", "GP_REGISTER_DWORD", "GP_REGISTER_WORD", "GP_REGISTER_HWORD"])),
                       self.immediate == 0))
 
 
@@ -276,7 +275,7 @@ states_and = [
 ]
 
 states_ret = [
-ProcessorState(
+    ProcessorState(
         {
             "r15": 0x7ffe0e8bcef5,
             "r14": 0x7ffe0e8bcef8,
@@ -410,7 +409,7 @@ ProcessorState(
 ]
 
 states_call = [
-ProcessorState(
+    ProcessorState(
         {
             "r15": 0x7ffe0e8bcef5,
             "r14": 0x7ffe0e8bcef8,
@@ -539,6 +538,7 @@ ProcessorState(
         }, ),
 ]
 
+
 def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
     regs = {
         # FLAGS
@@ -635,8 +635,9 @@ def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorC
 
     return ProcessorConstraints(regs, {}, memory)
 
+
 mnemonics = [
-    "AND",
+    "ADD",
     "RET",
     "CALL",
 ]
@@ -647,27 +648,57 @@ def build_operand():
 
 
 class InstructionParameters:
-    def __init__(self, s: Solver, id, pre : ProcessorState, post: ProcessorState):
-        self.s : Solver = s
+    def __init__(self, s: Solver, id, pre: ProcessorState, post: ProcessorState):
+        self.s: Solver = s
         self.id = f"{id}"
-        self.pre_absolute : ProcessorState = pre
-        self.post_absolute : ProcessorState = post
-        self.pre : ProcessorConstraints = init_registers(s, states[0], f"{id}_pre")
-        self.post : ProcessorConstraints = init_registers(s, states[1], f"{id}_post")
+        self.pre_absolute: ProcessorState = pre
+        self.post_absolute: ProcessorState = post
+        self.pre: ProcessorConstraints = init_registers(s, states[0], f"{id}_pre")
+        self.post: ProcessorConstraints = init_registers(s, states[1], f"{id}_post")
         self.mnemonic = mnemonic = String(f"{id}_mnemonic")
         s.add(Or(*([mnemonic == m for m in mnemonics])))
         self.instruction_size = BitVec(f"{id}_instrucion_size", 64)
         s.add(self.instruction_size == self.post.regs["rip"] - self.pre.regs["rip"])
-        self.operands : list[Operand] = [Operand(s, f"{n}_{id}") for n in range(4)]
+        self.operands: list[Operand] = [Operand(s, f"{n}_{id}") for n in range(4)]
 
 
 def model_add(p: InstructionParameters):
-    p.s.add(Implies(p.mnemonic == "AND", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    # Does not consider memory operands with displacement
+    # Does not consider variations where 32-bit immediate is sign-extended
+
+    p.s.add(Implies(p.mnemonic == "ADD", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    p.s.add(Implies(p.mnemonic == "ADD", And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
+
+    # Constrain operand types
+    p.s.add(Implies(p.mnemonic == "ADD", Or(
+        p.operands[1].type == "GP_REGISTER_QWORD",
+        p.operands[1].type == "GP_REGISTER_DWORD",
+        p.operands[1].type == "GP_REGISTER_WORD",
+        p.operands[1].type == "GP_REGISTER_HWORD",
+
+    )))
+    p.s.add(Implies(p.mnemonic == "ADD", Not(p.operands[0].type == "IMMEDIATE64")))
+
+    # Destination is register
+    p.s.add(Implies(p.mnemonic == "ADD", Not(p.operands[1].memory)), And(
+
+        # Source is immediate
+        Implies(p.operands[0].type == "IMMEDIATE32", Or(*(
+            Extract(31, 0, p.post.regs[s] ) == Extract(31, 0, p.pre.regs[s]) + Extract(31, 0,p.operands[0].immediate)
+            for s in dword_reg_names
+        ))),
+    ))
+
+
+    add_destination_in_memory = Bool(f"{id}_add_destination_in_memory")
+
+
 
 
 # The ret instruction
 def model_ret(p: InstructionParameters):
-    if p.post_absolute.regs["rip"] in p.pre_absolute.memory.values() and p.pre_absolute.regs["rsp"] in p.pre.memory.keys():
+    if p.post_absolute.regs["rip"] in p.pre_absolute.memory.values() and p.pre_absolute.regs[
+        "rsp"] in p.pre.memory.keys():
         # New %rip must be old (%rsp)
         p.s.add(Implies(p.mnemonic == "RET", p.post.regs["rip"] == p.pre.memory[p.pre_absolute.regs["rsp"]]))
         # New %rsp must be increased by register size
@@ -688,10 +719,10 @@ def model_ret(p: InstructionParameters):
 
 
 def model_call(p: InstructionParameters):
-
+    call_instruction_size = BitVec(f"{p.id}_call_instruction_size", 64)
 
     p.s.add(Implies(p.mnemonic == "CALL", p.operands[0].used))
-    for o in p.operands[1:]:
+    for o in p.operands[2:]:
         p.s.add(Implies(p.mnemonic == "CALL", Not(o.used)))
 
     # New %rsp must be decreased by register size
@@ -702,14 +733,13 @@ def model_call(p: InstructionParameters):
         if n not in ["rsp", "rip"]:
             p.s.add(Implies(p.mnemonic == "CALL", p.post.regs[n] == p.pre.regs[n]))
 
-    p.s.add(Implies(p.mnemonic == "CALL", Or(p.operands[0].type == "IMMEDIATE32", p.operands[0].type == "GP_REGISTER_QWORD")))
+    p.s.add(Implies(p.mnemonic == "CALL",
+                    Or(p.operands[0].type == "IMMEDIATE32", p.operands[0].type == "GP_REGISTER_QWORD")))
 
     # rsp must have been saved during trace
     if p.post_absolute.regs["rsp"] not in p.post_absolute.memory:
         p.s.add(p.mnemonic != "CALL")
         return
-
-    call_instruction_size = BitVec(f"{p.id}_call_instruction_size", 64)
 
     # Return address must have been saved
     p.s.add(p.post_absolute.memory[p.post_absolute.regs["rsp"]] == p.pre_absolute.regs["rip"] + call_instruction_size)
@@ -717,35 +747,57 @@ def model_call(p: InstructionParameters):
     # Near relative call
     p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "IMMEDIATE32"), And(
         call_instruction_size == 5,
-        p.post_absolute.regs["rip"] == (p.pre_absolute.regs["rip"] + call_instruction_size + SignExt(32, Extract(31, 0, p.operands[0].immediate))),
-        Not(p.operands[0].memory)
+        p.post_absolute.regs["rip"] == (p.pre_absolute.regs["rip"] + call_instruction_size + SignExt(32, Extract(31, 0,
+                                                                                                                 p.operands[
+                                                                                                                     0].immediate))),
+        Not(p.operands[0].memory),
+        Not(p.operands[1].used)
     )))
 
-    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD"), And(
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[1].used)), And(
         Or(call_instruction_size == 2, call_instruction_size == 3)
     )))
 
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", p.operands[1].used), And(
+        Or(call_instruction_size == 6, call_instruction_size == 7)
+    )))
+
     # Absolute address in register
-    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[0].memory)),
-        Or(*(
-            And(p.operands[0].register == s, p.post_absolute.regs["rip"] == p.pre_absolute.regs[s])
-            for s in qword_reg_names
-        ))
-    ))
+    p.s.add(
+        Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[0].memory)), And(
+            Or(*(
+                And(p.operands[0].register == s, p.post_absolute.regs["rip"] == p.pre_absolute.regs[s])
+                for s in qword_reg_names
+            )),
+            Not(p.operands[1].used)
+        )))
 
-    # Absolute address in memory
-    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory),
-        Or(*(
-            And(p.operands[0].register == s,
-                (p.post_absolute.regs["rip"] == p.pre_absolute.memory[p.pre_absolute.regs[s]]) if s in p.pre_absolute.memory else False)
-            for s in qword_reg_names
-        ))
-    ))
+    # Absolute address in memory, no displacement
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory,
+                        Not(p.operands[1].used)),
+                    Or(*(
+                        And(p.operands[0].register == s,
+                            (p.post_absolute.regs["rip"] == p.pre_absolute.memory[p.pre_absolute.regs[s]])) if
+                        p.pre_absolute.regs[s] in p.pre_absolute.memory else False
+                        for s in qword_reg_names
+                    ))
+                    ))
+
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory,
+                         p.operands[1].used), And(
+        p.operands[1].type == "IMMEDIATE32",
+        Not(p.operands[1].memory),
+        Or(*(And(p.operands[0].register == s,
+                 (SignExt(32, Extract(31, 0, p.operands[1].immediate)) + p.pre_absolute.memory[
+                     p.pre_absolute.regs[s]] == p.post_absolute.regs["rip"])
+                 if p.pre_absolute.regs[s] in p.pre_absolute.memory else False)
+             for s in qword_reg_names
+             ))
+    )))
 
 
+states = states_ret
 
-
-states = states_call
 
 def init_solver():
     solver = Solver()
@@ -759,11 +811,12 @@ def init_solver():
     if solver.check() == sat:
         print(solver.model()[p.mnemonic])
         print(hex(int(f"{solver.model()[p.operands[0].immediate]}")))
+        print(solver.model()[p.operands[0].register])
         print(solver.model()[p.operands[0].type])
+        print(solver.model()[p.operands[0].memory])
     else:
         print("unsat")
 
 
 if __name__ == "__main__":
     init_solver()
-
