@@ -1217,6 +1217,135 @@ states_mov = [
         }, )
 ]
 
+states_mov2 = [
+ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x6b00000000000005,
+            "rcx": 0x7ffe0e8bcf39,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3023,
+            "cs": 0x33,
+            "eflags": 0x206,
+            "rsp": 0x7ffe0e8bce98,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf70: 0x1,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf39: 0x0,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf50: 0x0,
+        }, ),
+    ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x6b00000000000005,
+            "rcx": 0x7ffe0e8bcf39,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x1,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3026,
+            "cs": 0x33,
+            "eflags": 0x206,
+            "rsp": 0x7ffe0e8bce98,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf70: 0x1,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf39: 0x6b00000000000005,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf50: 0x0,
+        }, )
+]
+
 
 def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
     regs = {
@@ -1390,9 +1519,9 @@ def model_mov(p: InstructionParameters):
                 for dest in filter(lambda r: r != "rip", names)
                 ))
             )) for reg_type,  names in [
-                ("GP_REGISTER_QWORD", qword_reg_names),
-                ("GP_REGISTER_DWORD", dword_reg_names),
-                ("GP_REGISTER_WORD",  word_reg_names),
+                ("GP_REGISTER_QWORD", list(filter(lambda r: r != "rip", qword_reg_names))),
+                ("GP_REGISTER_DWORD", list(filter(lambda r: r != "eip", dword_reg_names))),
+                ("GP_REGISTER_WORD", list(filter(lambda r: r != "ip", word_reg_names))),
                 ("GP_REGISTER_HWORD", hword_reg_names),
             ]
         )),
@@ -1411,14 +1540,14 @@ def model_mov(p: InstructionParameters):
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
                 )
-                   for src in filter(lambda r: r != "rip", qword_reg_names)
+                   for src in list(filter(lambda r: r != "rip", qword_reg_names))
                    ))
-               for dest in filter(lambda r: r != "rip", names)
+               for dest in names
                ))
           )) for reg_type, width, names in [
-                ("GP_REGISTER_QWORD", 64, qword_reg_names),
-                ("GP_REGISTER_DWORD", 32, dword_reg_names),
-                ("GP_REGISTER_WORD",  16, word_reg_names),
+                ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                ("GP_REGISTER_WORD",  16, list(filter(lambda r: r != "ip", word_reg_names))),
                 ("GP_REGISTER_HWORD", 8,  hword_reg_names),
             ]
         )),
@@ -1448,31 +1577,33 @@ def model_mov(p: InstructionParameters):
         )),
 
         # Source is register
-        And(*(Implies(p.operands[0].type == reg_type, And(
+        And(*(Implies(p.operands[0].type == reg_type,
             Or(*(
                 Or(*(
                     And(
-                        src != dest,  # Todo: remove
-                        ((Extract(width - 1, 0, p.pre.regs[dest]) == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]])) if
-                        p.pre_absolute.regs[dest] in p.post.memory else False),
+                        (p.pre.regs[src] == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]) if p.post_absolute.regs[dest] in p.post.memory else False),
                         (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
                             != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
                             p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[dest] in p.pre.memory
                         else False),  # Todo: remove
+                        (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width, p.post.memory[p.pre_absolute.regs[dest]]) if
+                         p.post_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
+                        (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
+                         p.post_absolute.regs[dest] in p.post.memory else False),
+
                         p.operands[1].bit_length == width,
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
 
                     )
-                    for src in filter(lambda r: r != "rip", names)
-                ))
-                for dest in filter(lambda r: r != "rip", qword_reg_names)
+                    for src in names
+                )) for dest in list(filter(lambda r: r != "rip", qword_reg_names))
             ))
-        )) for reg_type, width, names in [
-                  ("GP_REGISTER_QWORD", 64, qword_reg_names),
-                  ("GP_REGISTER_DWORD", 32, dword_reg_names),
-                  ("GP_REGISTER_WORD", 16, word_reg_names),
-                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+        ) for reg_type, width, names in [
+                    ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                    ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                    ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                    ("GP_REGISTER_HWORD", 8, hword_reg_names)
               ]
               )),
     )))
@@ -1631,7 +1762,7 @@ def model_add(p: InstructionParameters):
     )))
 
     # All registers that are not the destination register must stay the same
-    for n in filter(lambda r: r != "rip", qword_reg_names):
+    for n in list(filter(lambda r: r != "rip", qword_reg_names)):
         p.s.add(Implies(p.mnemonic == "ADD",
                         Implies(Not(And(p.operands[1].register == n, Not(p.operands[1].memory))),
                                 p.post.regs[n] == p.pre.regs[n])
@@ -1786,7 +1917,7 @@ def model_sub(p: InstructionParameters):
     )))
 
     # All registers that are not the destination register must stay the same
-    for n in filter(lambda r: r != "rip", qword_reg_names):
+    for n in list(filter(lambda r: r != "rip", qword_reg_names)):
         p.s.add(Implies(p.mnemonic == "SUB",
                         Implies(Not(And(p.operands[1].register == n, Not(p.operands[1].memory))),
                                 p.post.regs[n] == p.pre.regs[n])
@@ -1860,7 +1991,7 @@ def model_dec(p: InstructionParameters):
     )))
 
     # All registers that are not the destination register must stay the same
-    for n in filter(lambda r: r != "rip", qword_reg_names):
+    for n in list(filter(lambda r: r != "rip", qword_reg_names)):
         p.s.add(Implies(p.mnemonic == "DEC",
                         Implies(Not(And(p.operands[0].register == n, Not(p.operands[0].memory))),
                                 p.post.regs[n] == p.pre.regs[n])))
@@ -1912,7 +2043,7 @@ def model_inc(p: InstructionParameters):
     )))
 
     # All registers that are not the destination register must stay the same
-    for n in filter(lambda r: r != "rip", qword_reg_names):
+    for n in list(filter(lambda r: r != "rip", qword_reg_names)):
         p.s.add(Implies(p.mnemonic == "INC",
                         Implies(Not(And(p.operands[0].register == n, Not(p.operands[0].memory))),
                                 p.post.regs[n] == p.pre.regs[n])))
@@ -1998,7 +2129,7 @@ def model_call(p: InstructionParameters):
     )))
 
 
-states = states_mov
+states = states_mov2
 
 
 def init_solver():
