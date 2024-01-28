@@ -23,3 +23,4 @@ get_fibonacci3:
     // Epilogue
     mov %rax, (%rcx)
     ret
+    call 0x80(%rip)

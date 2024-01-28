@@ -1,5 +1,98 @@
 from z3 import *
 
+qword_reg_names = [
+    "r15",
+    "r14",
+    "r13",
+    "r12",
+    "rbp",
+    "rbx",
+    "r11",
+    "r10",
+    "r9",
+    "r8",
+    "rax",
+    "rcx",
+    "rdx",
+    "rsi",
+    "rdi",
+    "rip",
+    "rsp"
+]
+
+dword_reg_names = [
+    "r15d",
+    "r14d",
+    "r13d",
+    "r12d",
+    "ebp",
+    "ebx",
+    "r11d",
+    "r10d",
+    "r9d",
+    "r8d",
+    "eax",
+    "ecx",
+    "edx",
+    "esi",
+    "edi",
+    "eip",
+    "esp"
+]
+
+word_reg_names = [
+    "r15w",
+    "r14w",
+    "r13w",
+    "r12w",
+    "bp",
+    "bx",
+    "r11w",
+    "r10w",
+    "r9w",
+    "r8w",
+    "ax",
+    "cx",
+    "dx",
+    "si",
+    "di",
+    "ip",
+    "sp",
+]
+
+hword_reg_names = [
+    "r15b",
+    "r14b",
+    "r13b",
+    "r12b",
+    "bpl",
+    "bl",
+    "r11b",
+    "r10b",
+    "r9b",
+    "r8b",
+    "al",
+    "cl",
+    "dl",
+    "ah",
+    "bh",
+    "ch",
+    "dh",
+    "sil",
+    "dil",
+    "spl",
+]
+
+parameter_types = [
+    "GP_REGISTER_QWORD",
+    "GP_REGISTER_DWORD",
+    "GP_REGISTER_WORD",
+    "GP_REGISTER_HWORD",
+    "IMMEDIATE64",
+    "IMMEDIATE32",
+    "IMMEDIATE16",
+    "IMMEDIATE8",
+]
 
 class ProcessorState:
     def __init__(self, regs: dict, fpregs: dict, memory: dict) -> None:
@@ -13,6 +106,38 @@ class ProcessorConstraints:
         self.regs = regs
         self.fpregs = fpregs
         self.memory = memory
+
+
+
+
+class Operand:
+    def __init__(self, s: Solver, id):
+        self.type = String(f"{id}_type")
+        s.add(Or(*(self.type == t for t in parameter_types)))
+        self.immediate = BitVec(f"{id}_immediate", 64)
+        self.register = String(f"{id}_register")
+        self.memory = Bool(f"{id}_memory")
+        self.used = Bool(f"{id}_used")
+
+        # Constrain width of immediates
+        s.add(Implies(self.type == "IMMEDIATE8", self.immediate < 0x100))
+        s.add(Implies(self.type == "IMMEDIATE16", And(self.immediate < 0x10000, self.immediate >= 0x100)))
+        s.add(Implies(self.type == "IMMEDIATE32", And(self.immediate < 0x100000000, self.immediate >= 0x10000)))
+        s.add(Implies(self.type == "IMMEDIATE64", self.immediate >= 0x100000000))
+
+        # Constrain register names
+        s.add(Implies(self.type == "GP_REGISTER_QWORD", Or(*(self.register == r for r in qword_reg_names))))
+        s.add(Implies(self.type == "GP_REGISTER_DWORD", Or(*(self.register == r for r in dword_reg_names))))
+        s.add(Implies(self.type == "GP_REGISTER_WORD", Or(*(self.register == r for r in word_reg_names))))
+        s.add(Implies(self.type == "GP_REGISTER_HWORD", Or(*(self.register == r for r in hword_reg_names))))
+
+        # ...
+
+        s.add(Implies(Or(*(self.type == r for r in ["IMMEDIATE8", "IMMEDIATE16", "IMMEDIATE32", "IMMEDIATE64"])),
+                      self.register == "rax"))
+
+        s.add(Implies(Or(*(self.type == r for r in ["GP_REGISTER_QWORD", "GP_REGISTER_DWORD", "GP_REGISTER_WORD", "GP_REGISTER_HWORD"])),
+                      self.immediate == 0))
 
 
 states_and = [
@@ -284,47 +409,138 @@ ProcessorState(
         }, )
 ]
 
-qword_reg_names = [
-    "r15",
-    "r14",
-    "r13",
-    "r12",
-    "rbp",
-    "rbx",
-    "r11",
-    "r10",
-    "r9",
-    "r8",
-    "rax",
-    "rcx",
-    "rdx",
-    "rsi",
-    "rdi",
-    "rip",
-    "rsp"
+states_call = [
+ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x6b00000000000005,
+            "rcx": 0x7ffe0e8bcf39,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x4,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3013,
+            "cs": 0x33,
+            "eflags": 0x202,
+            "rsp": 0x7ffe0e8bce98,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf70: 0x1,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf39: 0x6b00000000000005,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+            0x7ffe0e8bcf50: 0x0,
+        }, ),
+    ProcessorState(
+        {
+            "r15": 0x7ffe0e8bcef5,
+            "r14": 0x7ffe0e8bcef8,
+            "r13": 0x7ffe0e8bcf10,
+            "r12": 0x42a5ebfd3000,
+            "rbp": 0x7ffe0e8bcf70,
+            "rbx": 0x0,
+            "r11": 0x246,
+            "r10": 0x0,
+            "r9": 0x7f6eef8d1440,
+            "r8": 0x0,
+            "rax": 0x6b00000000000005,
+            "rcx": 0x7ffe0e8bcf39,
+            "rdx": 0x0,
+            "rsi": 0x7ffe0e8bcf10,
+            "rdi": 0x4,
+            "orig_rax": 0xffffffffffffffff,
+            "rip": 0x42a5ebfd3000,
+            "cs": 0x33,
+            "eflags": 0x202,
+            "rsp": 0x7ffe0e8bce90,
+            "ss": 0x2b,
+            "fs_base": 0x7f6eef8d1440,
+            "gs_base": 0x0,
+            "ds": 0x0,
+            "es": 0x0,
+            "fs": 0x0,
+            "gs": 0x0,
+        }, {}, {
+            0x7ffe0e8bcf68: 0x7f6eef957000,
+            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
+            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
+            0x7ffe0e8bcf50: 0x0,
+            0x7ffe0e8bceb8: 0x55e1cf7196a0,
+            0x7ffe0e8bceb0: 0x55e1cf719490,
+            0x7ffe0e8bce98: 0x55e1cdbe9498,
+            0x7ffe0e8bcea0: 0x0,
+            0x7ffe0e8bcf70: 0x1,
+            0x7f6eef8d1440: 0x7f6eef8d1440,
+            0x7ffe0e8bcee0: 0x55e1cf7182b0,
+            0x42a5ebfd3000: 0xff834801fe4c8d48,
+            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
+            0x7ffe0e8bcea8: 0x0,
+            0x7ffe0e8bcf39: 0x6b00000000000005,
+            0x7ffe0e8bcf10: 0x78,
+            0x7ffe0e8bce90: 0x42a5ebfd3018,
+            0x7ffe0e8bcef8: 0x55e1cf7184b0,
+            0x7ffe0e8bced8: 0x55e1cdbed2e4,
+            0x7ffe0e8bcec0: 0x2,
+            0x7ffe0e8bcec8: 0x40,
+            0x7ffe0e8bced0: 0x55e1cf719490,
+            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
+            0x7ffe0e8bcef0: 0x782d720000000000,
+            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
+            0x7ffe0e8bcf18: 0x179,
+            0x7ffe0e8bcf20: 0x100,
+            0x7ffe0e8bcf28: 0x279,
+            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
+            0x7ffe0e8bcf30: 0x379,
+            0x7ffe0e8bcf38: 0x5f2,
+            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
+            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
+        }, ),
 ]
 
 def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
-    # define registers
     regs = {
-        # QWORD
-        "r15": BitVec(f"{id}_r15", 64),
-        "r14": BitVec(f"{id}_r14", 64),
-        "r13": BitVec(f"{id}_r13", 64),
-        "r12": BitVec(f"{id}_r12", 64),
-        "rbp": BitVec(f"{id}_rbp", 64),
-        "rbx": BitVec(f"{id}_rbx", 64),
-        "r11": BitVec(f"{id}_r11", 64),
-        "r10": BitVec(f"{id}_r10", 64),
-        "r9": BitVec(f"{id}_r9", 64),
-        "r8": BitVec(f"{id}_r8", 64),
-        "rax": BitVec(f"{id}_rax", 64),
-        "rcx": BitVec(f"{id}_rcx", 64),
-        "rdx": BitVec(f"{id}_rdx", 64),
-        "rsi": BitVec(f"{id}_rsi", 64),
-        "rdi": BitVec(f"{id}_rdi", 64),
-        "rip": BitVec(f"{id}_rip", 64),
-        "rsp": BitVec(f"{id}_rsp", 64),
         # FLAGS
         "eflags": BitVec(f"{id}_eflags", 32),
         "cf": BitVec(f"{id}_cf", 1),
@@ -338,67 +554,19 @@ def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorC
         "of": BitVec(f"{id}_of", 1),
         "id": BitVec(f"{id}_id", 1),
         # Omit other flags for now
-
-        # DWORD
-        "r15d": BitVec(f"{id}_r15d", 32),
-        "r14d": BitVec(f"{id}_r14d", 32),
-        "r13d": BitVec(f"{id}_r13d", 32),
-        "r12d": BitVec(f"{id}_r12d", 32),
-        "ebp": BitVec(f"{id}_ebp", 32),
-        "ebx": BitVec(f"{id}_ebx", 32),
-        "r11d": BitVec(f"{id}_r11d", 32),
-        "r10d": BitVec(f"{id}_r10d", 32),
-        "r9d": BitVec(f"{id}_r9d", 32),
-        "r8d": BitVec(f"{id}_r8d", 32),
-        "eax": BitVec(f"{id}_eax", 32),
-        "ecx": BitVec(f"{id}_ecx", 32),
-        "edx": BitVec(f"{id}_edx", 32),
-        "esi": BitVec(f"{id}_esi", 32),
-        "edi": BitVec(f"{id}_edi", 32),
-        "eip": BitVec(f"{id}_eip", 32),
-        "esp": BitVec(f"{id}_esp", 32),
-
-        # WORD
-        "r15w": BitVec(f"{id}_r15w", 16),
-        "r14w": BitVec(f"{id}_r14w", 16),
-        "r13w": BitVec(f"{id}_r13w", 16),
-        "r12w": BitVec(f"{id}_r12w", 16),
-        "bp": BitVec(f"{id}_bp", 16),
-        "bx": BitVec(f"{id}_bx", 16),
-        "r11w": BitVec(f"{id}_r11w", 16),
-        "r10w": BitVec(f"{id}_r10w", 16),
-        "r9w": BitVec(f"{id}_r9w", 16),
-        "r8w": BitVec(f"{id}_r8w", 16),
-        "ax": BitVec(f"{id}_ax", 16),
-        "cx": BitVec(f"{id}_cx", 16),
-        "dx": BitVec(f"{id}_dx", 16),
-        "si": BitVec(f"{id}_si", 16),
-        "di": BitVec(f"{id}_di", 16),
-        "ip": BitVec(f"{id}_ip", 16),
-        "sp": BitVec(f"{id}_sp", 16),
-
-        # HWORD
-        "r15b": BitVec(f"{id}_r15b", 8),
-        "r14b": BitVec(f"{id}_r14b", 8),
-        "r13b": BitVec(f"{id}_r13b", 8),
-        "r12b": BitVec(f"{id}_r12b", 8),
-        "bpl": BitVec(f"{id}_bpl", 8),
-        "bl": BitVec(f"{id}_bl", 8),
-        "r11b": BitVec(f"{id}_r11b", 8),
-        "r10b": BitVec(f"{id}_r10b", 8),
-        "r9b": BitVec(f"{id}_r9b", 8),
-        "r8b": BitVec(f"{id}_r8b", 8),
-        "al": BitVec(f"{id}_al", 8),
-        "cl": BitVec(f"{id}_cl", 8),
-        "dl": BitVec(f"{id}_dl", 8),
-        "ah": BitVec(f"{id}_ah", 8),
-        "bh": BitVec(f"{id}_bh", 8),
-        "ch": BitVec(f"{id}_ch", 8),
-        "dh": BitVec(f"{id}_dh", 8),
-        "sil": BitVec(f"{id}_sil", 8),
-        "dil": BitVec(f"{id}_dil", 8),
-        "spl": BitVec(f"{id}_spl", 8),
     }
+
+    for n in qword_reg_names:
+        regs[n] = BitVec(f"{id}_{n}", 64)
+
+    for n in dword_reg_names:
+        regs[n] = BitVec(f"{id}_{n}", 32)
+
+    for n in word_reg_names:
+        regs[n] = BitVec(f"{id}_{n}", 16)
+
+    for n in hword_reg_names:
+        regs[n] = BitVec(f"{id}_{n}", 8)
 
     # express relations
     s.add((regs["r15"] & 0xffffffff) == ZeroExt(32, regs["r15d"]), (regs["r15"] & 0xffff) == ZeroExt(48, regs["r15w"]),
@@ -467,514 +635,131 @@ def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorC
 
     return ProcessorConstraints(regs, {}, memory)
 
-'''    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE8, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE16, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE32, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE64, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::INTEGER, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE8, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE16, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE32, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE64, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::INTEGER, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE8, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE16, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE32, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE64, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::INTEGER, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE8, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE16, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE32, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE64, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, %s",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::INTEGER, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "(%s), %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_DWORD, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "(%s), %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_WORD, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "(%s), %s",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_HWORD, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "(%s), %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_WORD, },
-        4
-    },
-    (instruction) {
-        "ADD",
-        "(%s), %s",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_HWORD, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_DWORD, },
-        4
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::GP_REGISTER_HWORD, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::SSE_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX512_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::AVX512_BITMASK, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE8, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE16, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE32, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::IMMEDIATE64, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_QWORD, parameter_type::INTEGER, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::GP_REGISTER_HWORD, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::SSE_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX512_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::AVX512_BITMASK, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE8, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE16, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE32, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::IMMEDIATE64, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_DWORD, parameter_type::INTEGER, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::GP_REGISTER_HWORD, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::SSE_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX512_REGISTER, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::AVX512_BITMASK, },
-        3
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE8, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE16, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE32, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::IMMEDIATE64, },
-        8
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_WORD, parameter_type::INTEGER, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::SSE_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX512_REGISTER, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::AVX512_BITMASK, },
-        2
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE8, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE16, },
-        6
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE32, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::IMMEDIATE64, },
-        7
-    },
-    (instruction) {
-        "ADD",
-        "%s, (%s)",
-        2,
-        {parameter_type::GP_REGISTER_HWORD, parameter_type::INTEGER, },
-        6
-    },
-'''
-
 mnemonics = [
     "AND",
     "RET",
+    "CALL",
 ]
 
 
 def build_operand():
     pass
 
-def model_add(s: Solver, mnemonic, instruction_size, pre_regs: dict, post_regs:dict, pre_absolute, post_absolute):
-    s.add(Implies(mnemonic == "AND", And(instruction_size > 2, instruction_size <= 8, instruction_size != 5)))
 
+class InstructionParameters:
+    def __init__(self, s: Solver, id, pre : ProcessorState, post: ProcessorState):
+        self.s : Solver = s
+        self.id = f"{id}"
+        self.pre_absolute : ProcessorState = pre
+        self.post_absolute : ProcessorState = post
+        self.pre : ProcessorConstraints = init_registers(s, states[0], f"{id}_pre")
+        self.post : ProcessorConstraints = init_registers(s, states[1], f"{id}_post")
+        self.mnemonic = mnemonic = String(f"{id}_mnemonic")
+        s.add(Or(*([mnemonic == m for m in mnemonics])))
+        self.instruction_size = BitVec(f"{id}_instrucion_size", 64)
+        s.add(self.instruction_size == self.post.regs["rip"] - self.pre.regs["rip"])
+        self.operands : list[Operand] = [Operand(s, f"{n}_{id}") for n in range(4)]
+
+
+def model_add(p: InstructionParameters):
+    p.s.add(Implies(p.mnemonic == "AND", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
 
 
 # The ret instruction
-def model_ret(s: Solver, mnemonic, instruction_size, pre: ProcessorConstraints, post: ProcessorConstraints, pre_absolute, post_absolute):
-    if post_absolute.regs["rip"] in pre_absolute.memory.values() and pre_absolute.regs["rsp"] in pre.memory.keys():
+def model_ret(p: InstructionParameters):
+    if p.post_absolute.regs["rip"] in p.pre_absolute.memory.values() and p.pre_absolute.regs["rsp"] in p.pre.memory.keys():
         # New %rip must be old (%rsp)
-        s.add(Implies(mnemonic == "RET", post.regs["rip"] == pre.memory[pre_absolute.regs["rsp"]]))
+        p.s.add(Implies(p.mnemonic == "RET", p.post.regs["rip"] == p.pre.memory[p.pre_absolute.regs["rsp"]]))
         # New %rsp must be increased by register size
-        s.add(Implies(mnemonic == "RET", post.regs["rsp"] == pre.regs["rsp"] + 8))
+        p.s.add(Implies(p.mnemonic == "RET", p.post.regs["rsp"] == p.pre.regs["rsp"] + 8))
         # All remaining registers, including eflags, must stay the same
         for n in qword_reg_names + ["eflags"]:
             if n not in ["rsp", "rip"]:
-                s.add(Implies(mnemonic == "RET", post.regs[n] == pre.regs[n]))
+                p.s.add(Implies(p.mnemonic == "RET", p.post.regs[n] == p.pre.regs[n]))
         # There must be no changes to memory
-        for address, value in pre.memory.items():
-            if address in post.memory.keys():
-                s.add(Implies(mnemonic == "RET", post.memory[address] == value))
+        for address, value in p.pre.memory.items():
+            if address in p.post.memory.keys():
+                p.s.add(Implies(p.mnemonic == "RET", p.post.memory[address] == value))
+        # There are no parameters
+        for o in p.operands:
+            p.s.add(Implies(p.mnemonic == "RET", Not(o.used)))
     else:
-        s.add(mnemonic != "RET")
+        p.s.add(p.mnemonic != "RET")
+
+
+def model_call(p: InstructionParameters):
+
+
+    p.s.add(Implies(p.mnemonic == "CALL", p.operands[0].used))
+    for o in p.operands[1:]:
+        p.s.add(Implies(p.mnemonic == "CALL", Not(o.used)))
+
+    # New %rsp must be decreased by register size
+    p.s.add(Implies(p.mnemonic == "CALL", p.post.regs["rsp"] == p.pre.regs["rsp"] - 8))
+
+    # All except for rsp and rip registers, including eflags, must stay the same
+    for n in qword_reg_names + ["eflags"]:
+        if n not in ["rsp", "rip"]:
+            p.s.add(Implies(p.mnemonic == "CALL", p.post.regs[n] == p.pre.regs[n]))
+
+    p.s.add(Implies(p.mnemonic == "CALL", Or(p.operands[0].type == "IMMEDIATE32", p.operands[0].type == "GP_REGISTER_QWORD")))
+
+    # rsp must have been saved during trace
+    if p.post_absolute.regs["rsp"] not in p.post_absolute.memory:
+        p.s.add(p.mnemonic != "CALL")
+        return
+
+    call_instruction_size = BitVec(f"{p.id}_call_instruction_size", 64)
+
+    # Return address must have been saved
+    p.s.add(p.post_absolute.memory[p.post_absolute.regs["rsp"]] == p.pre_absolute.regs["rip"] + call_instruction_size)
+
+    # Near relative call
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "IMMEDIATE32"), And(
+        call_instruction_size == 5,
+        p.post_absolute.regs["rip"] == (p.pre_absolute.regs["rip"] + call_instruction_size + SignExt(32, Extract(31, 0, p.operands[0].immediate))),
+        Not(p.operands[0].memory)
+    )))
+
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD"), And(
+        Or(call_instruction_size == 2, call_instruction_size == 3)
+    )))
+
+    # Absolute address in register
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[0].memory)),
+        Or(*(
+            And(p.operands[0].register == s, p.post_absolute.regs["rip"] == p.pre_absolute.regs[s])
+            for s in qword_reg_names
+        ))
+    ))
+
+    # Absolute address in memory
+    p.s.add(Implies(And(p.mnemonic == "CALL", p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory),
+        Or(*(
+            And(p.operands[0].register == s,
+                (p.post_absolute.regs["rip"] == p.pre_absolute.memory[p.pre_absolute.regs[s]]) if s in p.pre_absolute.memory else False)
+            for s in qword_reg_names
+        ))
+    ))
 
 
 
-states = states_and
+
+states = states_call
 
 def init_solver():
     solver = Solver()
-    pre = init_registers(solver, states[0], "pre")
-    post = init_registers(solver, states[1], "post")
 
-    mnemonic = String('mnemonic')
-    solver.add(Or(*([mnemonic == m for m in mnemonics])))
-    instruction_size = BitVec('instrucion_size', 64)
-    solver.add(instruction_size == post.regs["rip"] - pre.regs["rip"])
+    p = InstructionParameters(solver, "1", states[0], states[1])
 
-    model_add(solver, mnemonic, instruction_size, pre, post, states[0], states[1])
-    model_ret(solver, mnemonic, instruction_size, pre, post, states[0], states[1])
+    model_add(p)
+    model_ret(p)
+    model_call(p)
 
     if solver.check() == sat:
-        print(solver.model()[mnemonic])
+        print(solver.model()[p.mnemonic])
+        print(hex(int(f"{solver.model()[p.operands[0].immediate]}")))
+        print(solver.model()[p.operands[0].type])
     else:
         print("unsat")
 
