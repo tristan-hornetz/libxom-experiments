@@ -1592,6 +1592,7 @@ mnemonics = [
     "INC",
     "MOV",
     "JMP",
+    "JG",
 ]
 
 
@@ -1612,6 +1613,19 @@ class InstructionParameters:
         self.instruction_size = BitVec(f"{id}_instrucion_size", 64)
         s.add(self.instruction_size == self.post.regs["rip"] - self.pre.regs["rip"])
         self.operands: list[Operand] = [Operand(s, f"{n}_{id}") for n in range(4)]
+
+
+operation_sub = lambda dest, src: dest - src
+
+
+def model_flag_adjustment(p: InstructionParameters, o_dest, o_src, width_dest, width_src, operation):
+    o_src_ext = SignExt(width_dest - width_src, o_src)
+    return And(
+        (p.post.regs["zf"] == 1) == (operation(o_dest, o_src_ext) == 0),
+        (p.post.regs["sf"] == 1) == ((operation(o_dest, o_src_ext) & (1 << (width_dest - 1))) > 0)
+    )
+    # Other flags are not modeled for now
+
 
 
 def model_mov(p: InstructionParameters):
@@ -1769,6 +1783,9 @@ def model_add(p: InstructionParameters):
     # Does not consider memory operands with displacement
     # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
 
+    # Does not consider memory operands with displacement
+    # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
+
     p.s.add(Implies(p.mnemonic == "ADD", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
     p.s.add(Implies(p.mnemonic == "ADD",
                     And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
@@ -1787,70 +1804,105 @@ def model_add(p: InstructionParameters):
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] + Extract(31, 0, p.operands[0].immediate),
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(31, 0, p.operands[0].immediate), 32, 32,
+                                          lambda dest, src: dest + src)
+                    )
                 for s in filter(lambda n: n != "eip", dword_reg_names))),
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] + p.operands[0].immediate,
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest + src)
+                    )
                 for s in filter(lambda n: n != "rip", qword_reg_names)))
         )),
         Implies(p.operands[0].type == "IMMEDIATE16", Or(*(
             And(p.post.regs[s] == p.pre.regs[s] + Extract(15, 0, p.operands[0].immediate),
                 Extract(15, 0, p.operands[0].immediate) != 0,
-                p.operands[1].register == s)
+                p.operands[1].register == s,
+                model_flag_adjustment(p, p.pre.regs[s], Extract(15, 0, p.operands[0].immediate), 16, 16,
+                                      lambda dest, src: dest + src)
+                )
             for s in filter(lambda n: n != "ip", word_reg_names)
         ))),
         Implies(p.operands[0].type == "IMMEDIATE8", Or(
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] + Extract(7, 0, p.operands[0].immediate),
                     Extract(7, 0, p.operands[0].immediate) != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(7, 0, p.operands[0].immediate), 8, 8,
+                                          lambda dest, src: dest + src)
+                    )
                 for s in hword_reg_names)),
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] + p.operands[0].immediate,
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest + src)
+                    )
                 for s in filter(lambda n: n != "rip", qword_reg_names)))
         )),
 
         # Source is a register
-        And(*(
-            Implies(And(p.operands[0].type == type_name, Not(p.operands[0].memory)),
-                    Or(*(
-                        And(p.post.regs[dest] == p.pre.regs[dest] + p.pre.regs[source],
-                            p.operands[0].register == source,
-                            p.pre.regs[dest] != p.post.regs[dest],  # TODO Remove
-                            p.operands[1].register == dest)
-                        for source, dest in zip(name_list, name_list)
-                    ))
-                    ) for type_name, name_list in [
-            ("GP_REGISTER_QWORD", filter(lambda n: n != "rip", qword_reg_names)),
-            ("GP_REGISTER_DWORD", filter(lambda n: n != "eip", dword_reg_names)),
-            ("GP_REGISTER_WORD", filter(lambda n: n != "ip", word_reg_names)),
-            ("GP_REGISTER_HWORD", hword_reg_names)
-        ])),
+        And(*(Implies(And(p.operands[0].type == reg_type, Not(p.operands[0].memory)), And(
+            p.operands[1].type == reg_type,
+            Or(*(
+                Or(*(
+                    And(
+                        p.post.regs[dest] == p.pre.regs[dest] + p.pre.regs[src],
+                        p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest], p.pre.regs[src], width, width,
+                                              lambda dest, src: dest + src),
+                    )
+                    for src in filter(lambda r: r != "rip", names)
+                ))
+                for dest in filter(lambda r: r != "rip", names)
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
+              )),
 
         # Source is in memory
         Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
-        And(*(
-            Implies(And(p.operands[0].memory, p.operands[1].type == reg_type), Or(*(
-                And(
-                    (p.post.regs[dest] == p.pre.regs[dest] + Extract(width - 1, 0, p.pre.memory[
-                        source])) if source in p.pre.memory else False,
-                    p.operands[0].register == source,
-                    p.operands[0].bit_length == width,
-                    p.pre.regs[dest] != p.post.regs[dest],  # TODO Remove
-                    p.operands[1].register == dest)
-                for source, dest in zip(qword_reg_names, names)
-            )))
-            for reg_type, width, names in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names),
-            ("GP_REGISTER_WORD", 16, word_reg_names),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names),
-        ]
-        )),
+        And(*(Implies(And(p.operands[1].type == reg_type, p.operands[0].memory), And(
+            p.operands[0].type == "GP_REGISTER_QWORD",
+            Or(*(
+                Or(*(
+                    And(
+                        src != dest,  # Todo: remove
+                        (p.post.regs[dest] == p.pre.regs[dest] + Extract(width - 1, 0,
+                                                                         p.pre.memory[p.pre_absolute.regs[src]])) if
+                        p.pre_absolute.regs[src] in p.pre.memory else False,
+                        p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        p.operands[0].bit_length == width,
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest],
+                                              Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width,
+                                              width,
+                                              lambda dest, src: dest + src)
+                        if p.pre_absolute.regs[src] in p.pre.memory else False
+                    )
+                    for src in list(filter(lambda r: r != "rip", qword_reg_names))
+                ))
+                for dest in names
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
+              )),
     )))
 
     # Destination is memory
@@ -1871,7 +1923,10 @@ def model_add(p: InstructionParameters):
                             # TODO Remove
                             Extract(width - 1, 0, p.post.memory[address])
                             == Extract(width - 1, 0, p.pre.memory[address]) + Extract(width - 1, 0,
-                                                                                      p.operands[0].immediate)
+                                                                                      p.operands[0].immediate),
+                            model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[address]),
+                                                  Extract(width - 1, 0, p.operands[0].immediate), width, width,
+                                                  lambda dest, src: dest + src),
                         )
                         for register, address in list(filter(
                         lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
@@ -1882,32 +1937,47 @@ def model_add(p: InstructionParameters):
         )),
 
         # Source is register
-        And(*(
-            Implies(p.operands[0].type == reg_type,
-                    Or(*(
-                        And(
-                            p.operands[0].register == src_register,
-                            p.operands[1].register == dest_register,
-                            p.operands[1].bit_length == width,
-                            Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
-                                                                                     p.pre.memory[address]),
-                            # TODO Remove
-                            Extract(width - 1, 0, p.post.memory[address])
-                            == Extract(width - 1, 0, p.pre.memory[address]) + p.pre.regs[src_register]
-                        )
-                        for (dest_register, address), src_register in
-                        zip(filter(
-                            lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
-                                0] != "rip",
-                            p.pre_absolute.regs.items()), names)
-                    )))
-            for reg_type, width, names in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names),
-            ("GP_REGISTER_WORD", 16, word_reg_names),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names),
-        ]
-        )),
+        And(*(Implies(p.operands[0].type == reg_type,
+                      Or(*(
+                          Or(*(
+                              And(
+                                  (Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])
+                                   + p.pre.regs[src] == Extract(width - 1, 0,
+                                                                p.post.memory[p.pre_absolute.regs[dest]]) if
+                                   p.pre_absolute.regs[dest] in p.post.memory else False),
+                                  (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
+                                    != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
+                                   p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                       dest] in p.pre.memory
+                                   else False),  # Todo: remove
+                                  (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
+                                                                                                          p.post.memory[
+                                                                                                              p.pre_absolute.regs[
+                                                                                                                  dest]]) if
+                                   p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
+                                  (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
+                                   p.post_absolute.regs[dest] in p.post.memory else False),
+
+                                  p.operands[1].bit_length == width,
+                                  p.operands[0].register == src,
+                                  p.operands[1].register == dest,
+
+                                  model_flag_adjustment(p,
+                                                        Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                        p.pre.regs[src], width, width, lambda dest, src: dest + src) if
+                                  p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                      dest] in p.pre.memory else False,
+                              )
+                              for src in names
+                          )) for dest in list(filter(lambda r: r != "rip", qword_reg_names))
+                      ))
+                      ) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names)
+              ]
+              )),
     )))
 
     # All registers that are not the destination register must stay the same
@@ -1942,69 +2012,101 @@ def model_sub(p: InstructionParameters):
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] - Extract(31, 0, p.operands[0].immediate),
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(31, 0, p.operands[0].immediate), 32, 32,
+                                          lambda dest, src: dest - src)
+                    )
                 for s in filter(lambda n: n != "eip", dword_reg_names))),
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] - p.operands[0].immediate,
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest - src)
+                    )
                 for s in filter(lambda n: n != "rip", qword_reg_names)))
         )),
         Implies(p.operands[0].type == "IMMEDIATE16", Or(*(
             And(p.post.regs[s] == p.pre.regs[s] - Extract(15, 0, p.operands[0].immediate),
                 Extract(15, 0, p.operands[0].immediate) != 0,
-                p.operands[1].register == s)
+                p.operands[1].register == s,
+                model_flag_adjustment(p, p.pre.regs[s], Extract(15, 0, p.operands[0].immediate), 16, 16,
+                                      lambda dest, src: dest - src)
+                )
             for s in filter(lambda n: n != "ip", word_reg_names)
         ))),
         Implies(p.operands[0].type == "IMMEDIATE8", Or(
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] - Extract(7, 0, p.operands[0].immediate),
                     Extract(7, 0, p.operands[0].immediate) != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(7, 0, p.operands[0].immediate), 8, 8,
+                                          lambda dest, src: dest - src)
+                    )
                 for s in hword_reg_names)),
             Or(*(
                 And(p.post.regs[s] == p.pre.regs[s] - p.operands[0].immediate,
                     p.operands[0].immediate != 0,
-                    p.operands[1].register == s)
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest - src)
+                    )
                 for s in filter(lambda n: n != "rip", qword_reg_names)))
         )),
 
         # Source is a register
-        And(*(
-            Implies(And(p.operands[0].type == type_name, Not(p.operands[0].memory)),
-                    Or(*(
-                        And(p.post.regs[dest] == p.pre.regs[dest] - p.pre.regs[source],
-                            p.operands[0].register == source,
-                            p.pre.regs[dest] != p.post.regs[dest],  # TODO Remove
-                            p.operands[1].register == dest)
-                        for source, dest in zip(name_list, name_list)
-                    ))
-                    ) for type_name, name_list in [
-            ("GP_REGISTER_QWORD", filter(lambda n: n != "rip", qword_reg_names)),
-            ("GP_REGISTER_DWORD", filter(lambda n: n != "eip", dword_reg_names)),
-            ("GP_REGISTER_WORD", filter(lambda n: n != "ip", word_reg_names)),
-            ("GP_REGISTER_HWORD", hword_reg_names)
-        ])),
+        And(*(Implies(And(p.operands[0].type == reg_type, Not(p.operands[0].memory)), And(
+            p.operands[1].type == reg_type,
+            Or(*(
+                Or(*(
+                    And(
+                        p.post.regs[dest] == p.pre.regs[dest] - p.pre.regs[src],
+                        p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest], p.pre.regs[src], width, width,
+                                              lambda dest, src: dest - src),
+                    )
+                    for src in filter(lambda r: r != "rip", names)
+                ))
+                for dest in filter(lambda r: r != "rip", names)
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
+        )),
 
         # Source is in memory
         Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
-        And(*(
-            Implies(And(p.operands[0].memory, p.operands[1].type == reg_type), Or(*(
-                And(
-                    (p.post.regs[dest] == p.pre.regs[dest] - Extract(width - 1, 0, p.pre.memory[
-                        source])) if source in p.pre.memory else False,
-                    p.operands[0].register == source,
-                    p.operands[0].bit_length == width,
-                    p.pre.regs[dest] != p.post.regs[dest],  # TODO Remove
-                    p.operands[1].register == dest)
-                for source, dest in zip(qword_reg_names, names)
-            )))
-            for reg_type, width, names in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names),
-            ("GP_REGISTER_WORD", 16, word_reg_names),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names),
-        ]
+        And(*(Implies(And(p.operands[1].type == reg_type, p.operands[0].memory), And(
+            p.operands[0].type == "GP_REGISTER_QWORD",
+            Or(*(
+                Or(*(
+                    And(
+                        src != dest,  # Todo: remove
+                        (p.post.regs[dest] == p.pre.regs[dest] - Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]])) if
+                        p.pre_absolute.regs[src] in p.pre.memory else False,
+                        p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        p.operands[0].bit_length == width,
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest], Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width, width,
+                                              lambda dest, src: dest - src)
+                        if p.pre_absolute.regs[src] in p.pre.memory else False
+                    )
+                    for src in list(filter(lambda r: r != "rip", qword_reg_names))
+                ))
+                for dest in names
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
         )),
     )))
 
@@ -2026,7 +2128,10 @@ def model_sub(p: InstructionParameters):
                             # TODO Remove
                             Extract(width - 1, 0, p.post.memory[address])
                             == Extract(width - 1, 0, p.pre.memory[address]) - Extract(width - 1, 0,
-                                                                                      p.operands[0].immediate)
+                                                                                      p.operands[0].immediate),
+                            model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[address]),
+                                                  Extract(width - 1, 0, p.operands[0].immediate), width, width,
+                                                  lambda dest, src: dest - src),
                         )
                         for register, address in list(filter(
                         lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
@@ -2037,31 +2142,44 @@ def model_sub(p: InstructionParameters):
         )),
 
         # Source is register
-        And(*(
-            Implies(p.operands[0].type == reg_type,
-                    Or(*(
-                        And(
-                            p.operands[0].register == src_register,
-                            p.operands[1].register == dest_register,
-                            p.operands[1].bit_length == width,
-                            Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
-                                                                                     p.pre.memory[address]),
-                            # TODO Remove
-                            Extract(width - 1, 0, p.post.memory[address])
-                            == Extract(width - 1, 0, p.pre.memory[address]) - p.pre.regs[src_register]
-                        )
-                        for (dest_register, address), src_register in
-                        zip(filter(
-                            lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
-                                0] != "rip",
-                            p.pre_absolute.regs.items()), names)
-                    )))
-            for reg_type, width, names in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names),
-            ("GP_REGISTER_WORD", 16, word_reg_names),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names),
-        ]
+        And(*(Implies(p.operands[0].type == reg_type,
+                  Or(*(
+                      Or(*(
+                          And(
+                              (Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])
+                               - p.pre.regs[src] == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]) if
+                               p.pre_absolute.regs[dest] in p.post.memory else False),
+                              (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
+                                != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
+                               p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                   dest] in p.pre.memory
+                               else False),  # Todo: remove
+                              (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
+                                                                                                      p.post.memory[
+                                                                                                          p.pre_absolute.regs[
+                                                                                                              dest]]) if
+                               p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
+                              (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
+                               p.post_absolute.regs[dest] in p.post.memory else False),
+
+                              p.operands[1].bit_length == width,
+                              p.operands[0].register == src,
+                              p.operands[1].register == dest,
+
+                              model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                               p.pre.regs[src], width, width, lambda dest, src: dest - src) if
+                               p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                   dest] in p.pre.memory else False,
+                          )
+                          for src in names
+                      )) for dest in list(filter(lambda r: r != "rip", qword_reg_names))
+                  ))
+                  ) for reg_type, width, names in [
+              ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+              ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+              ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+              ("GP_REGISTER_HWORD", 8, hword_reg_names)
+          ]
         )),
     )))
 
@@ -2096,6 +2214,9 @@ def model_ret(p: InstructionParameters):
         p.s.add(p.mnemonic != "RET")
 
 
+_one = BitVec("__one", 8)
+
+
 def model_dec(p: InstructionParameters):
     p.s.add(Implies(p.mnemonic == "DEC", And(p.operands[0].used, Not(p.operands[0].is_immediate))))
     for o in p.operands[1:]:
@@ -2104,20 +2225,24 @@ def model_dec(p: InstructionParameters):
 
     # Destination is a register
     p.s.add(Implies(And(p.mnemonic == "DEC", Not(p.operands[0].memory)),
-                    And(*(
-                        Implies(p.operands[0].type == type_name,
-                                Or(*(
-                                    And(p.post.regs[dest] == p.pre.regs[dest] - 1,
-                                        p.operands[0].register == dest)
-                                    for dest in name_list
-                                ))
-                                ) for type_name, name_list in [
-                        ("GP_REGISTER_QWORD", filter(lambda n: n != "rip", qword_reg_names)),
-                        ("GP_REGISTER_DWORD", filter(lambda n: n != "eip", dword_reg_names)),
-                        ("GP_REGISTER_WORD", filter(lambda n: n != "ip", word_reg_names)),
-                        ("GP_REGISTER_HWORD", hword_reg_names)]
+        And(*(
+            Implies(p.operands[0].type == type_name,
+                    Or(*(
+                        And(p.post.regs[dest] == p.pre.regs[dest] - 1,
+                            p.operands[0].register == dest,
+                            model_flag_adjustment(p, p.pre.regs[dest], _one,
+                                                  width, 8,
+                                                  lambda dest, src: dest - src)
+                            )
+                        for dest in name_list
                     ))
-                    ))
+                    ) for type_name, width, name_list in [
+            ("GP_REGISTER_QWORD", 64, list(filter(lambda n: n != "rip", qword_reg_names))),
+            ("GP_REGISTER_DWORD", 32, list(filter(lambda n: n != "eip", dword_reg_names))),
+            ("GP_REGISTER_WORD", 16, list(filter(lambda n: n != "ip", word_reg_names))),
+            ("GP_REGISTER_HWORD", 8, hword_reg_names)]
+        ))
+    ))
 
     # Destination is in memory
     p.s.add(Implies(And(p.mnemonic == "DEC", p.operands[0].memory), And(
@@ -2128,7 +2253,9 @@ def model_dec(p: InstructionParameters):
                         And(
                             p.operands[0].register == register,
                             Extract(width - 1, 0, p.post.memory[address]) == Extract(width - 1, 0,
-                                                                                     p.pre.memory[address]) - 1
+                                                                                     p.pre.memory[address]) - 1,
+                            model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[address]), _one, width, 8,
+                                                  lambda dest, src: dest - src)
                         )
                         for register, address in list(filter(
                         lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
@@ -2156,20 +2283,24 @@ def model_inc(p: InstructionParameters):
 
     # Destination is a register
     p.s.add(Implies(And(p.mnemonic == "INC", Not(p.operands[0].memory)),
-                    And(*(
-                        Implies(p.operands[0].type == type_name,
-                                Or(*(
-                                    And(p.post.regs[dest] == p.pre.regs[dest] + 1,
-                                        p.operands[0].register == dest)
-                                    for dest in name_list
-                                ))
-                                ) for type_name, name_list in [
-                        ("GP_REGISTER_QWORD", list(filter(lambda n: n != "rip", qword_reg_names))),
-                        ("GP_REGISTER_DWORD", list(filter(lambda n: n != "eip", dword_reg_names))),
-                        ("GP_REGISTER_WORD", list(filter(lambda n: n != "ip", word_reg_names))),
-                        ("GP_REGISTER_HWORD", hword_reg_names)]
+        And(*(
+            Implies(p.operands[0].type == type_name,
+                    Or(*(
+                        And(p.post.regs[dest] == p.pre.regs[dest] + 1,
+                            p.operands[0].register == dest,
+                            model_flag_adjustment(p, p.pre.regs[dest], _one,
+                                                  width, 8,
+                                                  lambda dest, src: dest + src)
+                            )
+                        for dest in name_list
                     ))
-                    ))
+                    ) for type_name, width, name_list in [
+            ("GP_REGISTER_QWORD", 64, list(filter(lambda n: n != "rip", qword_reg_names))),
+            ("GP_REGISTER_DWORD", 32, list(filter(lambda n: n != "eip", dword_reg_names))),
+            ("GP_REGISTER_WORD", 16, list(filter(lambda n: n != "ip", word_reg_names))),
+            ("GP_REGISTER_HWORD", 8, hword_reg_names)]
+        ))
+    ))
 
     # Destination is in memory
     p.s.add(Implies(And(p.mnemonic == "INC", p.operands[0].memory), And(
@@ -2180,7 +2311,9 @@ def model_inc(p: InstructionParameters):
                         And(
                             p.operands[0].register == register,
                             Extract(width - 1, 0, p.post.memory[address]) == Extract(width - 1, 0,
-                                                                                     p.pre.memory[address]) + 1
+                                                                                     p.pre.memory[address]) + 1,
+                            model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[address]), _one, width, 8,
+                                                  lambda dest, src: dest + src)
                         )
                         for register, address in list(filter(
                         lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
@@ -2200,7 +2333,7 @@ def model_inc(p: InstructionParameters):
     # TODO: Model flags
 
 
-def model_unconditional_jump(p: InstructionParameters, mn: str):
+def model_jump(p: InstructionParameters, mn: str, taken):
 
     p.s.add(Implies(p.mnemonic == mn, p.operands[0].used))
     for o in p.operands[2:]:
@@ -2222,7 +2355,7 @@ def model_unconditional_jump(p: InstructionParameters, mn: str):
 
 
     # Near relative call
-    p.s.add(Implies(And(p.mnemonic == mn, p.operands[0].type == "IMMEDIATE32"), And(
+    p.s.add(Implies(And(p.mnemonic == mn, p.operands[0].type == "IMMEDIATE32", taken), And(
         p.post_absolute.regs["rip"] == (p.pre_absolute.regs["rip"] + SignExt(32, Extract(31, 0,
                                                                                                                  p.operands[
                                                                                                                      0].immediate))),
@@ -2233,7 +2366,7 @@ def model_unconditional_jump(p: InstructionParameters, mn: str):
 
     # Absolute address in register
     p.s.add(
-        Implies(And(p.mnemonic == mn, p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[0].memory)), And(
+        Implies(And(p.mnemonic == mn, p.operands[0].type == "GP_REGISTER_QWORD", Not(p.operands[0].memory), taken), And(
             Or(*(
                 And(p.operands[0].register == s, p.post_absolute.regs["rip"] == p.pre_absolute.regs[s])
                 for s in qword_reg_names
@@ -2243,7 +2376,7 @@ def model_unconditional_jump(p: InstructionParameters, mn: str):
 
     # Absolute address in memory, no displacement
     p.s.add(Implies(And(p.mnemonic == mn, p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory,
-                        Not(p.operands[1].used)),
+                        Not(p.operands[1].used), taken),
                     Or(*(
                         And(p.operands[0].register == s,
                             (p.post_absolute.regs["rip"] == p.pre_absolute.memory[p.pre_absolute.regs[s]])) if
@@ -2253,7 +2386,7 @@ def model_unconditional_jump(p: InstructionParameters, mn: str):
                     ))
 
     p.s.add(Implies(And(p.mnemonic == mn, p.operands[0].type == "GP_REGISTER_QWORD", p.operands[0].memory,
-                        p.operands[1].used), And(
+                        p.operands[1].used, taken), And(
         p.operands[1].type == "IMMEDIATE32",
         Not(p.operands[1].memory),
         Or(*(And(p.operands[0].register == s,
@@ -2263,6 +2396,19 @@ def model_unconditional_jump(p: InstructionParameters, mn: str):
              for s in qword_reg_names
              ))
     )))
+
+    p.s.add(Implies(And(p.mnemonic == mn, Not(taken)), And(
+        p.post.regs["rip"] > p.pre.regs["rip"],
+        p.instruction_size <= 6,
+    )))
+
+def model_jmp(p: InstructionParameters):
+    model_jump(p, "JMP", True)
+
+def model_jg(p: InstructionParameters):
+    jg_taken = Bool(f"{p.id}_jg_taken")
+    p.s.add(jg_taken == And(p.pre.regs["zf"] == 0 and p.pre.regs["sf"] == 0))
+    model_jump(p, "JG", jg_taken)
 
 def model_call(p: InstructionParameters):
     call_instruction_size = BitVec(f"{p.id}_call_instruction_size", 64)
@@ -2342,13 +2488,15 @@ def model_call(p: InstructionParameters):
     )))
 
 
-states = states_jmp
+states = states_add2
 
 
 def init_solver():
     solver = Solver()
 
     p = InstructionParameters(solver, "1", states[0], states[1])
+
+    solver.add(_one == 1)
 
     # model_add(p)
     model_ret(p)
@@ -2358,7 +2506,8 @@ def init_solver():
     model_inc(p)
     model_mov(p)
     model_add(p)
-    model_unconditional_jump(p, "JMP")
+    model_jmp(p)
+    model_jg(p)
     #model_binary_operation(p, "ADD", operator_add, [])
     #model_binary_operation(p, "SUB", operator_sub, [])
     #model_binary_operation(p, "MOV", operator_mov, ["eflags"])
