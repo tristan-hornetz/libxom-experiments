@@ -118,6 +118,7 @@ qword_reg_names_norip = list(filter(lambda r: r != "rip", qword_reg_names))
 dword_reg_names_noeip = list(filter(lambda r: r != "eip", dword_reg_names))
 word_reg_names_noip = list(filter(lambda r: r != "ip", word_reg_names))
 
+
 class ProcessorConstraints:
     def __init__(self, regs: dict, fpregs: dict, memory: dict) -> None:
         self.regs = regs
@@ -266,17 +267,19 @@ def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorC
 
 
 class InstructionParameters:
-    def __init__(self, s: Solver, id, pre: ProcessorState, post: ProcessorState, mnemonic, operands):
+    def __init__(self, s: Solver, id, pre: ProcessorState, post: ProcessorState, mnemonic, operands, next_instruction, is_last_instruction):
         self.s: Solver = s
         self.id = f"{id}"
         self.pre_absolute: ProcessorState = pre
         self.post_absolute: ProcessorState = post
         self.pre: ProcessorConstraints = init_registers(s, pre, f"{id}_pre")
         self.post: ProcessorConstraints = init_registers(s, post, f"{id}_post")
+        self.next_instruction = next_instruction
+        self.is_last_instruction = is_last_instruction
         self.mnemonic = mnemonic
         s.add(Or(*([mnemonic == m for m in mnemonics])))
-        self.instruction_size = BitVec(f"{id}_instrucion_size", 64)
-        s.add(self.instruction_size == self.post.regs["rip"] - self.pre.regs["rip"])
+        self.delta_rip = BitVec(f"{id}_instrucion_size", 64)
+        s.add(self.delta_rip == self.post.regs["rip"] - self.pre.regs["rip"])
         self.operands: list[Operand] = operands
 
 
@@ -293,19 +296,21 @@ def model_flag_adjustment(p: InstructionParameters, o_dest, o_src, width_dest, w
     # Other flags are not modeled for now
 
 
-
 def model_mov(p: InstructionParameters):
     # Does not consider memory operands with displacement
     p.s.add(Implies(p.mnemonic == "MOV",
                     And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
 
     p.s.add(Implies(And(p.mnemonic == "MOV", p.operands[0].is_immediate), And(
-                    p.instruction_size >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2),
-                        p.instruction_size <= ZeroExt(48, (p.operands[0].bit_length >> 3) + 3)
+        p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2),
+        p.delta_rip <= ZeroExt(48, (p.operands[0].bit_length >> 3) + 3)
     )))
 
     # Constrain operand types
     p.s.add(Implies(p.mnemonic == "MOV", Not(p.operands[1].is_immediate)))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Destination is register
     p.s.add(Implies(And(p.mnemonic == "MOV", Not(p.operands[1].memory)), And(
@@ -313,7 +318,7 @@ def model_mov(p: InstructionParameters):
         And(*(
             Implies(p.operands[0].type == f"IMMEDIATE{width}", Or(*(
                 And(p.post.regs[s] == Extract(width - 1, 0, p.operands[0].immediate),
-                    #p.pre.regs[s] != p.post.regs[s],  # TODO Remove
+                    # p.pre.regs[s] != p.post.regs[s],  # TODO Remove
                     p.operands[1].register == s)
                 for s in filter(lambda n: n != ip, names)
             )))
@@ -327,12 +332,12 @@ def model_mov(p: InstructionParameters):
         # Source is a register
         And(*(Implies(And(p.operands[0].type == reg_type, Not(p.operands[0].memory)), And(
             p.operands[1].type == reg_type,
-            p.instruction_size <= 4,
+            p.delta_rip <= 4,
             Or(*(
                 Or(*(
                     And(
                         p.post.regs[dest] == p.pre.regs[src],
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
                     )
@@ -352,14 +357,14 @@ def model_mov(p: InstructionParameters):
         Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
         And(*(Implies(And(p.operands[1].type == reg_type, p.operands[0].memory), And(
             p.operands[0].type == "GP_REGISTER_QWORD",
-            p.instruction_size <= 4,
+            p.delta_rip <= 4,
             Or(*(
                 Or(*(
                     And(
-                        #src != dest,  # Todo: remove
+                        # src != dest,  # Todo: remove
                         (p.post.regs[dest] == Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]])) if
                         p.pre_absolute.regs[src] in p.pre.memory else False,
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].bit_length == width,
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
@@ -390,7 +395,7 @@ def model_mov(p: InstructionParameters):
                         And(
                             p.operands[1].register == register,
                             p.operands[1].bit_length == width,
-                            #Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
+                            # Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
                             #                                                         p.pre.memory[address]),
                             # TODO Remove
                             Extract(width - 1, 0, p.post.memory[address]) == Extract(width - 1, 0,
@@ -406,33 +411,33 @@ def model_mov(p: InstructionParameters):
 
         # Source is register
         And(*(Implies(p.operands[0].type == reg_type, And(
-                     p.instruction_size <= 4,
-                      Or(*(
-                          Or(*(
-                              And(
-                                  (p.pre.regs[src] == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]) if
-                                   p.pre_absolute.regs[dest] in p.post.memory else False),
-                                  #(((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
-                                    #!= Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
-                                   #p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
-                                   #    dest] in p.pre.memory
-                                   #else False),  # Todo: remove
-                                  (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
-                                                                                                          p.post.memory[
-                                                                                                              p.pre_absolute.regs[
-                                                                                                                  dest]]) if
-                                   p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
-                                  (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
-                                   p.post_absolute.regs[dest] in p.post.memory else False),
+            p.delta_rip <= 4,
+            Or(*(
+                Or(*(
+                    And(
+                        (p.pre.regs[src] == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]) if
+                         p.pre_absolute.regs[dest] in p.post.memory else False),
+                        # (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
+                        # != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
+                        # p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                        #    dest] in p.pre.memory
+                        # else False),  # Todo: remove
+                        (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
+                                                                                                p.post.memory[
+                                                                                                    p.pre_absolute.regs[
+                                                                                                        dest]]) if
+                         p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
+                        (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
+                         p.post_absolute.regs[dest] in p.post.memory else False),
 
-                                  p.operands[1].bit_length == width,
-                                  p.operands[0].register == src,
-                                  p.operands[1].register == dest,
+                        p.operands[1].bit_length == width,
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
 
-                              )
-                              for src in names
-                          )) for dest in qword_reg_names_norip
-                      )))
+                    )
+                    for src in names
+                )) for dest in qword_reg_names_norip
+            )))
                       ) for reg_type, width, names in [
                   ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
                   ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
@@ -457,12 +462,15 @@ def model_add(p: InstructionParameters):
     # Does not consider memory operands with displacement
     # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
 
-    p.s.add(Implies(p.mnemonic == "ADD", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    p.s.add(Implies(p.mnemonic == "ADD", And(p.delta_rip > 2, p.delta_rip <= 8, p.delta_rip != 5)))
     p.s.add(Implies(p.mnemonic == "ADD",
                     And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
 
     p.s.add(Implies(And(p.mnemonic == "ADD", p.operands[0].is_immediate),
-                    p.instruction_size >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+                    p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Constrain operand types
     p.s.add(
@@ -523,8 +531,9 @@ def model_add(p: InstructionParameters):
             Or(*(
                 Or(*(
                     And(
-                        Extract(width - 1, 0, p.post.regs[dest]) == Extract(width - 1, 0, p.pre.regs[dest] + p.pre.regs[src]),
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        Extract(width - 1, 0, p.post.regs[dest]) == Extract(width - 1, 0,
+                                                                            p.pre.regs[dest] + p.pre.regs[src]),
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
                         model_flag_adjustment(p, p.pre.regs[dest], p.pre.regs[src], width, width,
@@ -549,10 +558,10 @@ def model_add(p: InstructionParameters):
             Or(*(
                 Or(*(
                     And(
-                        #src != dest,  # Todo: remove
+                        # src != dest,  # Todo: remove
                         (p.post.regs[dest] == p.pre.regs[dest] + Extract(width - 1, 0,
                                                                          p.pre.memory[p.pre_absolute.regs[src]])),
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].bit_length == width,
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
@@ -562,7 +571,8 @@ def model_add(p: InstructionParameters):
                                               lambda dest, src: dest + src)
 
                     )
-                    for src in list(filter(lambda s: p.pre_absolute.regs[s] in p.pre.memory.keys(), qword_reg_names_norip))
+                    for src in
+                list(filter(lambda s: p.pre_absolute.regs[s] in p.pre.memory.keys(), qword_reg_names_norip))
                 ))
                 for dest in names
             ))
@@ -588,7 +598,7 @@ def model_add(p: InstructionParameters):
                         And(
                             p.operands[1].register == register,
                             p.operands[1].bit_length == width,
-                            #Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
+                            # Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
                             #                                                         p.pre.memory[address]),
                             # TODO Remove
                             Extract(width - 1, 0, p.post.memory[address])
@@ -608,39 +618,39 @@ def model_add(p: InstructionParameters):
 
         # Source is register
         And(*(Implies(p.operands[0].type == reg_type,
-              Or(*(
-                  Or(*(
-                      And(
-                          Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]) + p.pre.regs[src]
-                                    == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]),
-                          #(((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
-                          #  != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
-                          # p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
-                          #    dest] in p.pre.memory
-                          # else False),  # Todo: remove
-                          Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) ==
-                            Extract(63, width, p.post.memory[p.pre_absolute.regs[dest]])
-                            if width < 64 else True,
-                          p.operands[1].bit_length == width,
-                          p.operands[0].register == src,
-                          p.operands[1].register == dest,
+                      Or(*(
+                          Or(*(
+                              And(
+                                  Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]) + p.pre.regs[src]
+                                  == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]),
+                                  # (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
+                                  #  != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
+                                  # p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                  #    dest] in p.pre.memory
+                                  # else False),  # Todo: remove
+                                  Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) ==
+                                  Extract(63, width, p.post.memory[p.pre_absolute.regs[dest]])
+                                  if width < 64 else True,
+                                  p.operands[1].bit_length == width,
+                                  p.operands[0].register == src,
+                                  p.operands[1].register == dest,
 
-                          model_flag_adjustment(p,
-                                                Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
-                                                p.pre.regs[src], width, width, lambda dest, src: dest + src),
-                      )
-                      for src in names
-                  )) for dest in list(filter(lambda s: p.pre_absolute.regs[s] in p.post.memory.keys() and
-                                                       p.pre_absolute.regs[s] in p.pre.memory.keys(),
-                                             qword_reg_names_norip))
-              ))
-              ) for reg_type, width, names in [
-          ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
-          ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
-          ("GP_REGISTER_WORD", 16, word_reg_names_noip),
-          ("GP_REGISTER_HWORD", 8, hword_reg_names)
-      ]
-      )),
+                                  model_flag_adjustment(p,
+                                                        Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                        p.pre.regs[src], width, width, lambda dest, src: dest + src),
+                              )
+                              for src in names
+                          )) for dest in list(filter(lambda s: p.pre_absolute.regs[s] in p.post.memory.keys() and
+                                                               p.pre_absolute.regs[s] in p.pre.memory.keys(),
+                                                     qword_reg_names_norip))
+                      ))
+                      ) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
+                  ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
+                  ("GP_REGISTER_WORD", 16, word_reg_names_noip),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names)
+              ]
+              )),
     )))
 
     # All registers that are not the destination register must stay the same
@@ -655,12 +665,15 @@ def model_sub(p: InstructionParameters):
     # Does not consider memory operands with displacement
     # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
 
-    p.s.add(Implies(p.mnemonic == "SUB", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    p.s.add(Implies(p.mnemonic == "SUB", And(p.delta_rip > 2, p.delta_rip <= 8, p.delta_rip != 5)))
     p.s.add(Implies(p.mnemonic == "SUB",
                     And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
 
     p.s.add(Implies(And(p.mnemonic == "SUB", p.operands[0].is_immediate),
-                    p.instruction_size >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+                    p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Constrain operand types
     p.s.add(
@@ -722,7 +735,7 @@ def model_sub(p: InstructionParameters):
                 Or(*(
                     And(
                         p.post.regs[dest] == p.pre.regs[dest] - p.pre.regs[src],
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
                         model_flag_adjustment(p, p.pre.regs[dest], p.pre.regs[src], width, width,
@@ -738,7 +751,7 @@ def model_sub(p: InstructionParameters):
                   ("GP_REGISTER_WORD", 16, word_reg_names_noip),
                   ("GP_REGISTER_HWORD", 8, hword_reg_names),
               ]
-        )),
+              )),
 
         # Source is in memory
         Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
@@ -747,14 +760,17 @@ def model_sub(p: InstructionParameters):
             Or(*(
                 Or(*(
                     And(
-                        #src != dest,  # Todo: remove
-                        (p.post.regs[dest] == p.pre.regs[dest] - Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]])) if
+                        # src != dest,  # Todo: remove
+                        (p.post.regs[dest] == p.pre.regs[dest] - Extract(width - 1, 0,
+                                                                         p.pre.memory[p.pre_absolute.regs[src]])) if
                         p.pre_absolute.regs[src] in p.pre.memory else False,
-                        #p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
+                        # p.post.regs[dest] != p.pre.regs[dest],  # Todo: remove
                         p.operands[0].bit_length == width,
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
-                        model_flag_adjustment(p, p.pre.regs[dest], Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width, width,
+                        model_flag_adjustment(p, p.pre.regs[dest],
+                                              Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width,
+                                              width,
                                               lambda dest, src: dest - src)
                         if p.pre_absolute.regs[src] in p.pre.memory else False
                     )
@@ -768,7 +784,7 @@ def model_sub(p: InstructionParameters):
                   ("GP_REGISTER_WORD", 16, word_reg_names_noip),
                   ("GP_REGISTER_HWORD", 8, hword_reg_names),
               ]
-        )),
+              )),
     )))
 
     # Destination is memory
@@ -784,7 +800,7 @@ def model_sub(p: InstructionParameters):
                         And(
                             p.operands[1].register == register,
                             p.operands[1].bit_length == width,
-                            #Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
+                            # Extract(width - 1, 0, p.post.memory[address]) != Extract(width - 1, 0,
                             #                                                         p.pre.memory[address]),
                             # TODO Remove
                             Extract(width - 1, 0, p.post.memory[address])
@@ -804,44 +820,46 @@ def model_sub(p: InstructionParameters):
 
         # Source is register
         And(*(Implies(p.operands[0].type == reg_type,
-                  Or(*(
                       Or(*(
-                          And(
-                              (Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])
-                               - p.pre.regs[src] == Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]) if
-                               p.pre_absolute.regs[dest] in p.post.memory else False),
-                              #(((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
-                              #  != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
-                              # p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
-                              #     dest] in p.pre.memory
-                              # else False),  # Todo: remove
-                              (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
-                                                                                                      p.post.memory[
-                                                                                                          p.pre_absolute.regs[
-                                                                                                              dest]]) if
-                               p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
-                              (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
-                               p.post_absolute.regs[dest] in p.post.memory else False),
+                          Or(*(
+                              And(
+                                  (Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])
+                                   - p.pre.regs[src] == Extract(width - 1, 0,
+                                                                p.post.memory[p.pre_absolute.regs[dest]]) if
+                                   p.pre_absolute.regs[dest] in p.post.memory else False),
+                                  # (((Extract(width - 1, 0, p.post.memory[p.pre_absolute.regs[dest]]))
+                                  #  != Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]])) if
+                                  # p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                  #     dest] in p.pre.memory
+                                  # else False),  # Todo: remove
+                                  (Extract(63, width, p.pre.memory[p.pre_absolute.regs[dest]]) == Extract(63, width,
+                                                                                                          p.post.memory[
+                                                                                                              p.pre_absolute.regs[
+                                                                                                                  dest]]) if
+                                   p.pre_absolute.regs[dest] in p.post.memory else False) if width < 64 else True,
+                                  (p.pre.regs[src] == (p.post_absolute.memory[p.post_absolute.regs[dest]]) if
+                                   p.post_absolute.regs[dest] in p.post.memory else False),
 
-                              p.operands[1].bit_length == width,
-                              p.operands[0].register == src,
-                              p.operands[1].register == dest,
+                                  p.operands[1].bit_length == width,
+                                  p.operands[0].register == src,
+                                  p.operands[1].register == dest,
 
-                              model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
-                                                               p.pre.regs[src], width, width, lambda dest, src: dest - src) if
-                               p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
-                                   dest] in p.pre.memory else False,
-                          )
-                          for src in names
-                      )) for dest in qword_reg_names_norip
-                  ))
-                  ) for reg_type, width, names in [
-              ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
-              ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
-              ("GP_REGISTER_WORD", 16, word_reg_names_noip),
-              ("GP_REGISTER_HWORD", 8, hword_reg_names)
-          ]
-        )),
+                                  model_flag_adjustment(p,
+                                                        Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                        p.pre.regs[src], width, width, lambda dest, src: dest - src) if
+                                  p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                      dest] in p.pre.memory else False,
+                              )
+                              for src in names
+                          )) for dest in qword_reg_names_norip
+                      ))
+                      ) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
+                  ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
+                  ("GP_REGISTER_WORD", 16, word_reg_names_noip),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names)
+              ]
+              )),
     )))
 
     # All registers that are not the destination register must stay the same
@@ -856,12 +874,15 @@ def model_cmp(p: InstructionParameters):
     # Does not consider memory operands with displacement
     # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
 
-    p.s.add(Implies(p.mnemonic == "CMP", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    p.s.add(Implies(p.mnemonic == "CMP", And(p.delta_rip > 2, p.delta_rip <= 8, p.delta_rip != 5)))
     p.s.add(Implies(p.mnemonic == "CMP",
                     And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
 
     p.s.add(Implies(And(p.mnemonic == "CMP", p.operands[0].is_immediate),
-                    p.instruction_size >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+                    p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Constrain operand types
     p.s.add(
@@ -876,14 +897,14 @@ def model_cmp(p: InstructionParameters):
                     p.operands[1].register == s,
                     model_flag_adjustment(p, p.pre.regs[s], Extract(31, 0, p.operands[0].immediate), 32, 32,
                                           lambda dest, src: dest - src)
-                    )
+                )
                 for s in dword_reg_names_noeip)),
             Or(*(
                 And(
                     p.operands[1].register == s,
                     model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
                                           lambda dest, src: dest - src)
-                    )
+                )
                 for s in qword_reg_names_norip))
         )),
         Implies(p.operands[0].type == "IMMEDIATE16", Or(*(
@@ -891,7 +912,7 @@ def model_cmp(p: InstructionParameters):
                 p.operands[1].register == s,
                 model_flag_adjustment(p, p.pre.regs[s], Extract(15, 0, p.operands[0].immediate), 16, 16,
                                       lambda dest, src: dest - src)
-                )
+            )
             for s in word_reg_names_noip
         ))),
         Implies(p.operands[0].type == "IMMEDIATE8", Or(
@@ -900,14 +921,14 @@ def model_cmp(p: InstructionParameters):
                     p.operands[1].register == s,
                     model_flag_adjustment(p, p.pre.regs[s], Extract(7, 0, p.operands[0].immediate), 8, 8,
                                           lambda dest, src: dest - src)
-                    )
+                )
                 for s in hword_reg_names)),
             Or(*(
                 And(
                     p.operands[1].register == s,
                     model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
                                           lambda dest, src: dest - src)
-                    )
+                )
                 for s in qword_reg_names_norip))
         )),
 
@@ -932,7 +953,7 @@ def model_cmp(p: InstructionParameters):
                   ("GP_REGISTER_WORD", 16, word_reg_names_noip),
                   ("GP_REGISTER_HWORD", 8, hword_reg_names),
               ]
-        )),
+              )),
 
         # Source is in memory
         Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
@@ -944,7 +965,9 @@ def model_cmp(p: InstructionParameters):
                         p.operands[0].bit_length == width,
                         p.operands[0].register == src,
                         p.operands[1].register == dest,
-                        model_flag_adjustment(p, p.pre.regs[dest], Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width, width,
+                        model_flag_adjustment(p, p.pre.regs[dest],
+                                              Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width,
+                                              width,
                                               lambda dest, src: dest - src)
                         if p.pre_absolute.regs[src] in p.pre.memory else False
                     )
@@ -958,7 +981,7 @@ def model_cmp(p: InstructionParameters):
                   ("GP_REGISTER_WORD", 16, word_reg_names_noip),
                   ("GP_REGISTER_HWORD", 8, hword_reg_names),
               ]
-        )),
+              )),
     )))
 
     # Destination is memory
@@ -987,28 +1010,29 @@ def model_cmp(p: InstructionParameters):
 
         # Source is register
         And(*(Implies(p.operands[0].type == reg_type,
-                  Or(*(
                       Or(*(
-                          And(
-                              p.operands[1].bit_length == width,
-                              p.operands[0].register == src,
-                              p.operands[1].register == dest,
+                          Or(*(
+                              And(
+                                  p.operands[1].bit_length == width,
+                                  p.operands[0].register == src,
+                                  p.operands[1].register == dest,
 
-                              model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
-                                                               p.pre.regs[src], width, width, lambda dest, src: dest - src) if
-                               p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
-                                   dest] in p.pre.memory else False,
-                          )
-                          for src in names
-                      )) for dest in qword_reg_names_norip
-                  ))
-                  ) for reg_type, width, names in [
-              ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
-              ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
-              ("GP_REGISTER_WORD", 16, word_reg_names_noip),
-              ("GP_REGISTER_HWORD", 8, hword_reg_names)
-          ]
-        )),
+                                  model_flag_adjustment(p,
+                                                        Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                        p.pre.regs[src], width, width, lambda dest, src: dest - src) if
+                                  p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                      dest] in p.pre.memory else False,
+                              )
+                              for src in names
+                          )) for dest in qword_reg_names_norip
+                      ))
+                      ) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
+                  ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
+                  ("GP_REGISTER_WORD", 16, word_reg_names_noip),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names)
+              ]
+              )),
     )))
 
     # All registers except for eflags must stay the same
@@ -1050,28 +1074,31 @@ def model_dec(p: InstructionParameters):
     p.s.add(Implies(p.mnemonic == "DEC", And(p.operands[0].used, Not(p.operands[0].is_immediate))))
     for o in p.operands[1:]:
         p.s.add(Implies(p.mnemonic == "DEC", Not(o.used)))
-    p.s.add(Implies(p.mnemonic == "DEC", p.instruction_size <= 3))
+    p.s.add(Implies(p.mnemonic == "DEC", p.delta_rip <= 3))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Destination is a register
     p.s.add(Implies(And(p.mnemonic == "DEC", Not(p.operands[0].memory)),
-        And(*(
-            Implies(p.operands[0].type == type_name,
-                    Or(*(
-                        And(p.post.regs[dest] == p.pre.regs[dest] - 1,
-                            p.operands[0].register == dest,
-                            model_flag_adjustment(p, p.pre.regs[dest], _one,
-                                                  width, 8,
-                                                  lambda dest, src: dest - src)
-                            )
-                        for dest in name_list
+                    And(*(
+                        Implies(p.operands[0].type == type_name,
+                                Or(*(
+                                    And(p.post.regs[dest] == p.pre.regs[dest] - 1,
+                                        p.operands[0].register == dest,
+                                        model_flag_adjustment(p, p.pre.regs[dest], _one,
+                                                              width, 8,
+                                                              lambda dest, src: dest - src)
+                                        )
+                                    for dest in name_list
+                                ))
+                                ) for type_name, width, name_list in [
+                        ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
+                        ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
+                        ("GP_REGISTER_WORD", 16, word_reg_names_noip),
+                        ("GP_REGISTER_HWORD", 8, hword_reg_names)]
                     ))
-                    ) for type_name, width, name_list in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
-            ("GP_REGISTER_WORD", 16, word_reg_names_noip),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names)]
-        ))
-    ))
+                    ))
 
     # Destination is in memory
     p.s.add(Implies(And(p.mnemonic == "DEC", p.operands[0].memory), And(
@@ -1106,28 +1133,31 @@ def model_inc(p: InstructionParameters):
     p.s.add(Implies(p.mnemonic == "INC", And(p.operands[0].used, Not(p.operands[0].is_immediate))))
     for o in p.operands[1:]:
         p.s.add(Implies(p.mnemonic == "INC", Not(o.used)))
-    p.s.add(Implies(p.mnemonic == "INC", p.instruction_size <= 3))
+    p.s.add(Implies(p.mnemonic == "INC", p.delta_rip <= 3))
+
+    if not p.is_last_instruction:
+        p.s.add(p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"])
 
     # Destination is a register
     p.s.add(Implies(And(p.mnemonic == "INC", Not(p.operands[0].memory)),
-        And(*(
-            Implies(p.operands[0].type == type_name,
-                    Or(*(
-                        And(p.post.regs[dest] == p.pre.regs[dest] + 1,
-                            p.operands[0].register == dest,
-                            model_flag_adjustment(p, p.pre.regs[dest], _one,
-                                                  width, 8,
-                                                  lambda dest, src: dest + src)
-                            )
-                        for dest in name_list
+                    And(*(
+                        Implies(p.operands[0].type == type_name,
+                                Or(*(
+                                    And(p.post.regs[dest] == p.pre.regs[dest] + 1,
+                                        p.operands[0].register == dest,
+                                        model_flag_adjustment(p, p.pre.regs[dest], _one,
+                                                              width, 8,
+                                                              lambda dest, src: dest + src)
+                                        )
+                                    for dest in name_list
+                                ))
+                                ) for type_name, width, name_list in [
+                        ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
+                        ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
+                        ("GP_REGISTER_WORD", 16, word_reg_names_noip),
+                        ("GP_REGISTER_HWORD", 8, hword_reg_names)]
                     ))
-                    ) for type_name, width, name_list in [
-            ("GP_REGISTER_QWORD", 64, qword_reg_names_norip),
-            ("GP_REGISTER_DWORD", 32, dword_reg_names_noeip),
-            ("GP_REGISTER_WORD", 16, word_reg_names_noip),
-            ("GP_REGISTER_HWORD", 8, hword_reg_names)]
-        ))
-    ))
+                    ))
 
     # Destination is in memory
     p.s.add(Implies(And(p.mnemonic == "INC", p.operands[0].memory), And(
@@ -1159,7 +1189,6 @@ def model_inc(p: InstructionParameters):
 
 
 def model_jump(p: InstructionParameters, mn: str, taken):
-
     p.s.add(Implies(p.mnemonic == mn, p.operands[0].used))
     for o in p.operands[2:]:
         p.s.add(Implies(p.mnemonic == mn, Not(o.used)))
@@ -1174,7 +1203,6 @@ def model_jump(p: InstructionParameters, mn: str, taken):
         if address in p.post_absolute.memory.keys():
             p.s.add(Implies(p.mnemonic == mn, value == p.post_absolute.memory[address]))
 
-
     p.s.add(Implies(p.mnemonic == mn,
                     Or(p.operands[0].type == "IMMEDIATE32", p.operands[0].type == "GP_REGISTER_QWORD")))
 
@@ -1183,12 +1211,11 @@ def model_jump(p: InstructionParameters, mn: str, taken):
     # Near relative call
     p.s.add(Implies(And(p.mnemonic == mn, p.operands[0].type == "IMMEDIATE32", taken), And(
         p.post_absolute.regs["rip"] == (p.pre_absolute.regs["rip"] + SignExt(32, Extract(31, 0,
-                                                                                                                 p.operands[
-                                                                                                                     0].immediate))),
+                                                                                         p.operands[
+                                                                                             0].immediate))),
         Not(p.operands[0].memory),
         Not(p.operands[1].used)
     )))
-
 
     # Absolute address in register
     p.s.add(
@@ -1225,16 +1252,19 @@ def model_jump(p: InstructionParameters, mn: str, taken):
 
     p.s.add(Implies(And(p.mnemonic == mn, Not(taken)), And(
         p.post.regs["rip"] > p.pre.regs["rip"],
-        p.instruction_size <= 6,
+        p.delta_rip <= 6,
     )))
+
 
 def model_jmp(p: InstructionParameters):
     model_jump(p, "JMP", True)
+
 
 def model_jg(p: InstructionParameters):
     jg_taken = Bool(f"{p.id}_jg_taken")
     p.s.add(jg_taken == And(p.pre.regs["zf"] == 0 and p.pre.regs["sf"] == 0))
     model_jump(p, "JG", jg_taken)
+
 
 def model_call(p: InstructionParameters):
     call_instruction_size = BitVec(f"{p.id}_call_instruction_size", 64)
@@ -1313,6 +1343,7 @@ def model_call(p: InstructionParameters):
              ))
     )))
 
+
 def bitlen_to_word(l):
     if l == 64:
         return "qword"
@@ -1323,14 +1354,15 @@ def bitlen_to_word(l):
     else:
         return "byte"
 
-def run_solver(instruction_address, max_occurrences):
+
+def run_solver(instruction_address, max_occurrences, next_instruction, is_last_instruction):
     plausible = set()
     for mnemonic_str, model in [
         ("ADD", model_add),
         ("RET", model_ret),
         ("CALL", model_call),
         ("SUB", model_sub),
-        ("DEC",  model_dec),
+        ("DEC", model_dec),
         ("INC", model_inc),
         ("MOV", model_mov),
         ("JMP", model_jmp),
@@ -1350,8 +1382,8 @@ def run_solver(instruction_address, max_occurrences):
         for i in range(len(victim_register_trace) - 1):
             if victim_register_trace[i].regs["rip"] != instruction_address:
                 continue
-            p = InstructionParameters(solver, i, victim_register_trace[i], victim_register_trace[i+1],
-                                      instruction_mnemonic, instruction_operands)
+            p = InstructionParameters(solver, i, victim_register_trace[i], victim_register_trace[i + 1],
+                                      instruction_mnemonic, instruction_operands, next_instruction, is_last_instruction)
             model(p)
             occurrences_modeled += 1
             if occurrences_modeled > max_occurrences:
@@ -1395,8 +1427,8 @@ def run_solver(instruction_address, max_occurrences):
 if __name__ == "__main__":
     from sys import argv, stdout, stderr
 
-    if len(argv) > 2:
-        plausible = run_solver(int(argv[2]), int(argv[1]))
+    if len(argv) > 3:
+        plausible = run_solver(int(argv[2]), int(argv[1]), int(argv[3]), int(argv[3]) == 0)
         with open(output_file, "at") as f:
             for p in plausible:
                 f.write(f"{hex(int(argv[2]))}: {p}\n")
@@ -1420,7 +1452,12 @@ if __name__ == "__main__":
     print("Running constraint solver. This may take a minute...")
 
     processes = list()
-    for addr in sorted(instruction_addresses):
+    instruction_addresses = list(sorted(instruction_addresses))
+    for i in range(len(instruction_addresses)):
+        addr = instruction_addresses[i]
+        next_addr = 0
+        if i < len(instruction_addresses) - 1:
+            next_addr = instruction_addresses[i+1]
         if addr >= 0x550000000000:
             break
         while len(processes) >= os.cpu_count():
@@ -1431,8 +1468,8 @@ if __name__ == "__main__":
                 except subprocess.TimeoutExpired:
                     p_running.append(p)
             processes = p_running
-        command = ['python', argv[0], f"{num_occurrences}", f"{addr}"]
-        #print(command)
+        command = ['python', argv[0], f"{num_occurrences}", f"{addr}", f"{next_addr}"]
+        # print(command)
         processes.append(subprocess.Popen(command, stdout=stdout, stderr=stderr))
 
     for p in processes:
