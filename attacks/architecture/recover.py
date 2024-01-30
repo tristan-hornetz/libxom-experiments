@@ -1,7 +1,7 @@
 from typing import Any, Callable
 
 from z3 import *
-from z3 import SeqRef, ReRef, BitVecRef
+from trace import *
 
 qword_reg_names = [
     "r15",
@@ -98,11 +98,7 @@ parameter_types = [
 ]
 
 
-class ProcessorState:
-    def __init__(self, regs: dict, fpregs: dict, memory: dict) -> None:
-        self.regs = regs
-        self.fpregs = fpregs
-        self.memory = memory
+
 
 
 class ProcessorConstraints:
@@ -153,1337 +149,6 @@ class Operand:
         s.add(Implies(Or(*(self.type == r for r in
                            ["GP_REGISTER_QWORD", "GP_REGISTER_DWORD", "GP_REGISTER_WORD", "GP_REGISTER_HWORD"])),
                       And(self.immediate == 0, Not(self.is_immediate))))
-
-
-states_and = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x1,
-            "rcx": 0x7ffe0e8bcf11,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301c,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce80,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf11: 0x7900000000000000,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf11,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301f,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce80,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf11: 0x7900000000000000,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-        }, )
-]
-
-states_ret = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf21,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3026,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce80,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf21: 0x7900000000000001,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf21,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3018,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce88,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf21: 0x7900000000000001,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-        }, )
-]
-
-states_call = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x4,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3013,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce98,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x6b00000000000005,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf50: 0x0,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x4,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3000,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce90,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x6b00000000000005,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-        }, ),
-]
-
-states_add = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf11,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301f,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce80,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf11: 0x7900000000000000,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf21,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3023,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce80,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf21: 0x7900000000000001,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-        }, )
-]
-
-states_add2 = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000001,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301c,
-            "cs": 0x33,
-            "eflags": 0x212,
-            "rsp": 0x7ffe0e8bce88,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000002,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301f,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce88,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-        }, )
-]
-
-states_sub = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000002,
-            "rcx": 0x7ffe0e8bcf29,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3018,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce90,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcf29: 0x7900000000000002,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x7900000000000002,
-            "rcx": 0x7ffe0e8bcf21,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd301c,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce90,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf21: 0x7900000000000001,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-        }, )
-]
-
-states_dec = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x5,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3010,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce98,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x6b00000000000005,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf50: 0x0,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x4,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3013,
-            "cs": 0x33,
-            "eflags": 0x202,
-            "rsp": 0x7ffe0e8bce98,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x6b00000000000005,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf50: 0x0,
-        }, )
-]
-
-states_mov = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd300b,
-            "cs": 0x33,
-            "eflags": 0x246,
-            "rsp": 0x7ffe0e8bce78,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bce78: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x1,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd300e,
-            "cs": 0x33,
-            "eflags": 0x246,
-            "rsp": 0x7ffe0e8bce78,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bce78: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-        }, )
-]
-
-states_mov2 = [
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3023,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce98,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x1,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf50: 0x0,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x6b00000000000005,
-            "rcx": 0x7ffe0e8bcf39,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3026,
-            "cs": 0x33,
-            "eflags": 0x206,
-            "rsp": 0x7ffe0e8bce98,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bcf70: 0x1,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bcf39: 0x6b00000000000005,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf50: 0x0,
-        }, )
-]
-
-states_jmp = [
-ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x1,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd300e,
-            "cs": 0x33,
-            "eflags": 0x246,
-            "rsp": 0x7ffe0e8bce78,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bce78: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-        }, ),
-    ProcessorState(
-        {
-            "r15": 0x7ffe0e8bcef5,
-            "r14": 0x7ffe0e8bcef8,
-            "r13": 0x7ffe0e8bcf10,
-            "r12": 0x42a5ebfd3000,
-            "rbp": 0x7ffe0e8bcf70,
-            "rbx": 0x0,
-            "r11": 0x246,
-            "r10": 0x0,
-            "r9": 0x7f6eef8d1440,
-            "r8": 0x0,
-            "rax": 0x1,
-            "rcx": 0x7ffe0e8bcf19,
-            "rdx": 0x0,
-            "rsi": 0x7ffe0e8bcf10,
-            "rdi": 0x1,
-            "orig_rax": 0xffffffffffffffff,
-            "rip": 0x42a5ebfd3023,
-            "cs": 0x33,
-            "eflags": 0x246,
-            "rsp": 0x7ffe0e8bce78,
-            "ss": 0x2b,
-            "fs_base": 0x7f6eef8d1440,
-            "gs_base": 0x0,
-            "ds": 0x0,
-            "es": 0x0,
-            "fs": 0x0,
-            "gs": 0x0,
-        }, {}, {
-            0x7ffe0e8bcf68: 0x7f6eef957000,
-            0x7ffe0e8bcf60: 0x55e1cdbeedb8,
-            0x7ffe0e8bcf58: 0x7ffe0e8bd0b8,
-            0x7ffe0e8bcf50: 0x0,
-            0x7ffe0e8bcf48: 0x7ffe0e8bcfa0,
-            0x7ffe0e8bcf40: 0x7ffe0e8bd06b,
-            0x7ffe0e8bcf38: 0x5f2,
-            0x7ffe0e8bce98: 0x55e1cdbe9498,
-            0x7ffe0e8bce88: 0x42a5ebfd3018,
-            0x7ffe0e8bcf70: 0x1,
-            0x7ffe0e8bcf19: 0x1,
-            0x7ffe0e8bcea0: 0x0,
-            0x7ffe0e8bce78: 0x42a5ebfd3018,
-            0x7f6eef8d1440: 0x7f6eef8d1440,
-            0x7ffe0e8bcee0: 0x55e1cf7182b0,
-            0x42a5ebfd3000: 0xff834801fe4c8d48,
-            0x7ffe0e8bcf08: 0x7ffe0e8ed000,
-            0x7ffe0e8bcf10: 0x78,
-            0x7ffe0e8bce90: 0x42a5ebfd3018,
-            0x7ffe0e8bcef8: 0x55e1cf7184b0,
-            0x7ffe0e8bce80: 0x42a5ebfd3018,
-            0x7ffe0e8bced8: 0x55e1cdbed2e4,
-            0x7ffe0e8bcea8: 0x0,
-            0x7ffe0e8bceb0: 0x55e1cf719490,
-            0x7ffe0e8bceb8: 0x55e1cf7196a0,
-            0x7ffe0e8bcec0: 0x2,
-            0x7ffe0e8bcec8: 0x40,
-            0x7ffe0e8bced0: 0x55e1cf719490,
-            0x7ffe0e8bcee8: 0x7ffe0e8bcef6,
-            0x7ffe0e8bcef0: 0x782d720000000000,
-            0x7ffe0e8bcf00: 0x7ffe0e8eb000,
-            0x7ffe0e8bcf18: 0x179,
-            0x7ffe0e8bcf20: 0x100,
-            0x7ffe0e8bcf28: 0x279,
-            0x7ffe0e8bcef5: 0xe1cf7184b0782d72,
-            0x7ffe0e8bcf30: 0x379,
-        }, )
-]
 
 
 def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
@@ -1593,26 +258,23 @@ mnemonics = [
     "MOV",
     "JMP",
     "JG",
+    "CMP",
 ]
 
 
-def build_operand():
-    pass
-
-
 class InstructionParameters:
-    def __init__(self, s: Solver, id, pre: ProcessorState, post: ProcessorState):
+    def __init__(self, s: Solver, id, pre: ProcessorState, post: ProcessorState, mnemonic, operands):
         self.s: Solver = s
         self.id = f"{id}"
         self.pre_absolute: ProcessorState = pre
         self.post_absolute: ProcessorState = post
-        self.pre: ProcessorConstraints = init_registers(s, states[0], f"{id}_pre")
-        self.post: ProcessorConstraints = init_registers(s, states[1], f"{id}_post")
-        self.mnemonic = mnemonic = String(f"{id}_mnemonic")
+        self.pre: ProcessorConstraints = init_registers(s, pre, f"{id}_pre")
+        self.post: ProcessorConstraints = init_registers(s, post, f"{id}_post")
+        self.mnemonic = mnemonic
         s.add(Or(*([mnemonic == m for m in mnemonics])))
         self.instruction_size = BitVec(f"{id}_instrucion_size", 64)
         s.add(self.instruction_size == self.post.regs["rip"] - self.pre.regs["rip"])
-        self.operands: list[Operand] = [Operand(s, f"{n}_{id}") for n in range(4)]
+        self.operands: list[Operand] = operands
 
 
 operation_sub = lambda dest, src: dest - src
@@ -2191,6 +853,174 @@ def model_sub(p: InstructionParameters):
                         ))
 
 
+def model_cmp(p: InstructionParameters):
+    # Does not consider memory operands with displacement
+    # We do not consider add operations with 0, as this does not constrain the model enough. We handle this case in NOP
+
+    p.s.add(Implies(p.mnemonic == "CMP", And(p.instruction_size > 2, p.instruction_size <= 8, p.instruction_size != 5)))
+    p.s.add(Implies(p.mnemonic == "CMP",
+                    And(p.operands[0].used, p.operands[1].used, Not(p.operands[2].used), p.operands[3].used)))
+
+    p.s.add(Implies(And(p.mnemonic == "CMP", p.operands[0].is_immediate),
+                    p.instruction_size >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
+
+    # Constrain operand types
+    p.s.add(
+        Implies(p.mnemonic == "CMP", And(Not(p.operands[0].type == "IMMEDIATE64"), Not(p.operands[1].is_immediate))))
+
+    # Destination is register
+    p.s.add(Implies(And(p.mnemonic == "CMP", Not(p.operands[1].memory)), And(
+        # Source is immediate
+        Implies(p.operands[0].type == "IMMEDIATE32", Or(
+            Or(*(
+                And(
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(31, 0, p.operands[0].immediate), 32, 32,
+                                          lambda dest, src: dest - src)
+                    )
+                for s in filter(lambda n: n != "eip", dword_reg_names))),
+            Or(*(
+                And(
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest - src)
+                    )
+                for s in filter(lambda n: n != "rip", qword_reg_names)))
+        )),
+        Implies(p.operands[0].type == "IMMEDIATE16", Or(*(
+            And(
+                p.operands[1].register == s,
+                model_flag_adjustment(p, p.pre.regs[s], Extract(15, 0, p.operands[0].immediate), 16, 16,
+                                      lambda dest, src: dest - src)
+                )
+            for s in filter(lambda n: n != "ip", word_reg_names)
+        ))),
+        Implies(p.operands[0].type == "IMMEDIATE8", Or(
+            Or(*(
+                And(
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], Extract(7, 0, p.operands[0].immediate), 8, 8,
+                                          lambda dest, src: dest - src)
+                    )
+                for s in hword_reg_names)),
+            Or(*(
+                And(
+                    p.operands[1].register == s,
+                    model_flag_adjustment(p, p.pre.regs[s], p.operands[0].immediate, 64, 64,
+                                          lambda dest, src: dest - src)
+                    )
+                for s in filter(lambda n: n != "rip", qword_reg_names)))
+        )),
+
+        # Source is a register
+        And(*(Implies(And(p.operands[0].type == reg_type, Not(p.operands[0].memory)), And(
+            p.operands[1].type == reg_type,
+            Or(*(
+                Or(*(
+                    And(
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest], p.pre.regs[src], width, width,
+                                              lambda dest, src: dest - src),
+                    )
+                    for src in filter(lambda r: r != "rip", names)
+                ))
+                for dest in filter(lambda r: r != "rip", names)
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
+        )),
+
+        # Source is in memory
+        Implies(p.operands[0].memory, p.operands[0].type == "GP_REGISTER_QWORD"),
+        And(*(Implies(And(p.operands[1].type == reg_type, p.operands[0].memory), And(
+            p.operands[0].type == "GP_REGISTER_QWORD",
+            Or(*(
+                Or(*(
+                    And(
+                        p.operands[0].bit_length == width,
+                        p.operands[0].register == src,
+                        p.operands[1].register == dest,
+                        model_flag_adjustment(p, p.pre.regs[dest], Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[src]]), width, width,
+                                              lambda dest, src: dest - src)
+                        if p.pre_absolute.regs[src] in p.pre.memory else False
+                    )
+                    for src in list(filter(lambda r: r != "rip", qword_reg_names))
+                ))
+                for dest in names
+            ))
+        )) for reg_type, width, names in [
+                  ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+                  ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+                  ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+                  ("GP_REGISTER_HWORD", 8, hword_reg_names),
+              ]
+        )),
+    )))
+
+    # Destination is memory
+    p.s.add(Implies(And(p.mnemonic == "CMP", p.operands[1].memory), And(
+        # Source cannot be memory, destination is indicated by a qword register
+        Not(p.operands[0].memory),
+        p.operands[1].type == "GP_REGISTER_QWORD",
+
+        # Source is immediate
+        And(*(
+            Implies(p.operands[0].type == f"IMMEDIATE{width}",
+                    Or(*(
+                        And(
+                            p.operands[1].register == register,
+                            model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[address]),
+                                                  Extract(width - 1, 0, p.operands[0].immediate), width, width,
+                                                  lambda dest, src: dest - src),
+                        )
+                        for register, address in list(filter(
+                        lambda item: item[1] in p.pre.memory.keys() and item[1] in p.post.memory.keys() and item[
+                            0] != "rip",
+                        p.pre_absolute.regs.items()))
+                    )))
+            for width in [8, 16, 32, 64]
+        )),
+
+        # Source is register
+        And(*(Implies(p.operands[0].type == reg_type,
+                  Or(*(
+                      Or(*(
+                          And(
+                              p.operands[1].bit_length == width,
+                              p.operands[0].register == src,
+                              p.operands[1].register == dest,
+
+                              model_flag_adjustment(p, Extract(width - 1, 0, p.pre.memory[p.pre_absolute.regs[dest]]),
+                                                               p.pre.regs[src], width, width, lambda dest, src: dest - src) if
+                               p.pre_absolute.regs[dest] in p.post.memory and p.pre_absolute.regs[
+                                   dest] in p.pre.memory else False,
+                          )
+                          for src in names
+                      )) for dest in list(filter(lambda r: r != "rip", qword_reg_names))
+                  ))
+                  ) for reg_type, width, names in [
+              ("GP_REGISTER_QWORD", 64, list(filter(lambda r: r != "rip", qword_reg_names))),
+              ("GP_REGISTER_DWORD", 32, list(filter(lambda r: r != "eip", dword_reg_names))),
+              ("GP_REGISTER_WORD", 16, list(filter(lambda r: r != "ip", word_reg_names))),
+              ("GP_REGISTER_HWORD", 8, hword_reg_names)
+          ]
+        )),
+    )))
+
+    # All registers except for eflags must stay the same
+    for n in list(filter(lambda r: r != "rip", qword_reg_names)):
+        p.s.add(Implies(p.mnemonic == "CMP", p.post_absolute.regs[n] == p.pre_absolute.regs[n]))
+
+    for address, value in p.pre_absolute.memory.items():
+        if address in p.post_absolute.memory.keys():
+            p.s.add(Implies(p.mnemonic == "CMP", value == p.post_absolute.memory[address]))
+
+
 # The ret instruction
 def model_ret(p: InstructionParameters):
     if p.post_absolute.regs["rip"] in p.pre_absolute.memory.values() and p.pre_absolute.regs[
@@ -2272,8 +1102,6 @@ def model_dec(p: InstructionParameters):
                         Implies(Not(And(p.operands[0].register == n, Not(p.operands[0].memory))),
                                 p.post.regs[n] == p.pre.regs[n])))
 
-    # TODO: Model flags
-
 
 def model_inc(p: InstructionParameters):
     p.s.add(Implies(p.mnemonic == "INC", And(p.operands[0].used, Not(p.operands[0].is_immediate))))
@@ -2329,8 +1157,6 @@ def model_inc(p: InstructionParameters):
         p.s.add(Implies(p.mnemonic == "INC",
                         Implies(Not(And(p.operands[0].register == n, Not(p.operands[0].memory))),
                                 p.post.regs[n] == p.pre.regs[n])))
-
-    # TODO: Model flags
 
 
 def model_jump(p: InstructionParameters, mn: str, taken):
@@ -2488,45 +1314,52 @@ def model_call(p: InstructionParameters):
     )))
 
 
-states = states_add2
-
-
-def init_solver():
+def init_solver(instruction_address):
     solver = Solver()
-
-    p = InstructionParameters(solver, "1", states[0], states[1])
 
     solver.add(_one == 1)
 
-    # model_add(p)
-    model_ret(p)
-    model_call(p)
-    model_sub(p)
-    model_dec(p)
-    model_inc(p)
-    model_mov(p)
-    model_add(p)
-    model_jmp(p)
-    model_jg(p)
-    #model_binary_operation(p, "ADD", operator_add, [])
-    #model_binary_operation(p, "SUB", operator_sub, [])
-    #model_binary_operation(p, "MOV", operator_mov, ["eflags"])
+    instruction_mnemonic = String(f"{instruction_address}_mnemonic")
+    instruction_operands = [Operand(solver, f"{instruction_address}_operand_{n}") for n in range(4)]
+
+
+    for i in range(100):
+        if victim_register_trace[i].regs["rip"] != instruction_address:
+            continue
+        p = InstructionParameters(solver, i, victim_register_trace[i], victim_register_trace[i+1],
+                                  instruction_mnemonic, instruction_operands)
+        model_ret(p)
+        model_call(p)
+        model_sub(p)
+        model_dec(p)
+        model_inc(p)
+        model_mov(p)
+        model_add(p)
+        model_jmp(p)
+        model_jg(p)
+        model_cmp(p)
 
     if solver.check() == sat:
-        print(solver.model()[p.mnemonic])
-        print("Operand 1")
-        print(hex(int(f"{solver.model()[p.operands[0].immediate]}")))
-        print(solver.model()[p.operands[0].register])
-        print(solver.model()[p.operands[0].type])
-        print(solver.model()[p.operands[0].memory])
-        print("Operand 2")
-        print(hex(int(f"{solver.model()[p.operands[1].immediate]}")))
-        print(solver.model()[p.operands[1].register])
-        print(solver.model()[p.operands[1].type])
-        print(solver.model()[p.operands[1].memory])
+        instr = f"{solver.model()[instruction_mnemonic]}".replace("\"", "")
+        op_strs = list()
+        for i in range(4):
+            if not solver.model()[instruction_operands[i].used]:
+                break
+            if solver.model()[instruction_operands[i].is_immediate]:
+                op_strs.append(str(hex(int(f"{solver.model()[instruction_operands[i].immediate]}"))))
+            else:
+                op_strs.append(f"{solver.model()[instruction_operands[i].register]}".replace("\"", ""))
+            if solver.model()[instruction_operands[i].memory]:
+                op_strs[i] = f"({op_strs[i]})"
+        print(f"{hex(instruction_address)}: {instr} {','.join(op_strs)}")
+
     else:
-        print("unsat")
+        print(f"{hex(instruction_address)}: unsat")
 
 
 if __name__ == "__main__":
-    init_solver()
+    instruction_addresses = set()
+    for state in victim_register_trace:
+        instruction_addresses.add(state.regs["rip"])
+    for addr in sorted(instruction_addresses):
+        init_solver(addr)
