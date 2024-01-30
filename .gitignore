@@ -7,3 +7,4 @@ libxom/latex
 cmake-build-debug
 venv
 .*
+attacks/architecture/__pycache__
