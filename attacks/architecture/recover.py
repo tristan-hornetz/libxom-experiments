@@ -1315,51 +1315,62 @@ def model_call(p: InstructionParameters):
 
 
 def init_solver(instruction_address):
-    solver = Solver()
+    plausible = list()
+    for mnemonic_str, model in [
+        ("ADD", model_add),
+        ("RET", model_ret),
+        ("CALL", model_call),
+        ("SUB", model_sub),
+        ("DEC",  model_dec),
+        ("INC", model_inc),
+        ("MOV", model_mov),
+        ("JMP", model_jmp),
+        ("JG", model_jg),
+        ("CMP", model_cmp),
+    ]:
+        solver = Solver()
 
-    solver.add(_one == 1)
+        solver.add(_one == 1)
 
-    instruction_mnemonic = String(f"{instruction_address}_mnemonic")
-    instruction_operands = [Operand(solver, f"{instruction_address}_operand_{n}") for n in range(4)]
+        instruction_mnemonic = String(f"{instruction_address}_mnemonic")
+        instruction_operands = [Operand(solver, f"{instruction_address}_operand_{n}") for n in range(4)]
 
+        solver.add(instruction_mnemonic == mnemonic_str)
 
-    for i in range(100):
-        if victim_register_trace[i].regs["rip"] != instruction_address:
-            continue
-        p = InstructionParameters(solver, i, victim_register_trace[i], victim_register_trace[i+1],
-                                  instruction_mnemonic, instruction_operands)
-        model_ret(p)
-        model_call(p)
-        model_sub(p)
-        model_dec(p)
-        model_inc(p)
-        model_mov(p)
-        model_add(p)
-        model_jmp(p)
-        model_jg(p)
-        model_cmp(p)
+        for i in range(100):
+            if victim_register_trace[i].regs["rip"] != instruction_address:
+                continue
+            p = InstructionParameters(solver, i, victim_register_trace[i], victim_register_trace[i+1],
+                                      instruction_mnemonic, instruction_operands)
+            model(p)
+            if i % 50 == 0:
+                if solver.check() == unsat:
+                    break
 
-    if solver.check() == sat:
-        instr = f"{solver.model()[instruction_mnemonic]}".replace("\"", "")
-        op_strs = list()
-        for i in range(4):
-            if not solver.model()[instruction_operands[i].used]:
-                break
-            if solver.model()[instruction_operands[i].is_immediate]:
-                op_strs.append(str(hex(int(f"{solver.model()[instruction_operands[i].immediate]}"))))
-            else:
-                op_strs.append(f"{solver.model()[instruction_operands[i].register]}".replace("\"", ""))
-            if solver.model()[instruction_operands[i].memory]:
-                op_strs[i] = f"({op_strs[i]})"
-        print(f"{hex(instruction_address)}: {instr} {','.join(op_strs)}")
+        if solver.check() == sat:
+            instr = f"{solver.model()[instruction_mnemonic]}".replace("\"", "")
+            op_strs = list()
+            for i in range(4):
+                if not solver.model()[instruction_operands[i].used]:
+                    break
+                if solver.model()[instruction_operands[i].is_immediate]:
+                    op_strs.append(str(hex(int(f"{solver.model()[instruction_operands[i].immediate]}"))))
+                else:
+                    op_strs.append(f"{solver.model()[instruction_operands[i].register]}".replace("\"", ""))
+                if solver.model()[instruction_operands[i].memory]:
+                    op_strs[i] = f"({op_strs[i]})"
+            plausible.append(f"{instr} {','.join(op_strs)}")
 
+    if len(plausible) > 0:
+        print(f"{hex(instruction_address)}: {plausible[0]}        (one of {len(plausible)} alternatives)")
     else:
         print(f"{hex(instruction_address)}: unsat")
-
 
 if __name__ == "__main__":
     instruction_addresses = set()
     for state in victim_register_trace:
         instruction_addresses.add(state.regs["rip"])
     for addr in sorted(instruction_addresses):
+        if addr >= 0x550000000000:
+            break
         init_solver(addr)
