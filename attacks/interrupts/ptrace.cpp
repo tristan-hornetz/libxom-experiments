@@ -198,21 +198,21 @@ static void debug_cycle(const pid_t child_pid, const char* output_directory) {
 }
 
 int main(int argc, char* argv[]){
-    size_t buf[FIB_MAX + 1];
     size_t (*get_fibonacci_xom)(size_t, size_t*);
     pid_t child_pid;
     struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
     const char* output_directory = ".";
 
+    // Give user option to specify output directory
     if(argc > 1){
         output_directory = argv[1];
         prepare_output_dir(output_directory);
     }
 
+    // Get mapped memory regions
     get_maps();
 
-    fclose(stderr);
-
+    // Put victim code into XOM
     if(!xbuf){
         puts("Could allocate XOM buffer!");
     }
@@ -224,22 +224,23 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
+    // Fork into attacker / victim
     child_pid = fork();
     if(!child_pid)
         victim(get_fibonacci_xom);
 
     usleep(500);
 
-
+    // Ptrace the victim process
     if (ptrace(PTRACE_ATTACH, child_pid, NULL, NULL) < 0) {
         printf("Ptrace attach failed - errno %d\n", errno);
         return 1;
     }
 
+    // Single-step through program, save registers and parts of the memory state after every instruction
     debug_cycle(child_pid, output_directory);
 
     ptrace(PTRACE_DETACH, child_pid, NULL, NULL);
-
 
     return 0;
 }
