@@ -108,6 +108,8 @@ mnemonics = [
     "JMP",
     "JG",
     "CMP",
+    "LEA",
+    "XCHG",
 ]
 
 qword_reg_names_norip = list(filter(lambda r: r != "rip", qword_reg_names))
@@ -125,13 +127,17 @@ class ProcessorConstraints:
 class Operand:
     def __init__(self, s: Solver, id):
         self.type = String(f"{id}_type")
-        s.add(Or(*(self.type == t for t in parameter_types)))
         self.immediate = BitVec(f"{id}_immediate", 64)
         self.register = String(f"{id}_register")
         self.memory = Bool(f"{id}_memory")
         self.used = Bool(f"{id}_used")
         self.is_immediate = Bool(f"{id}_is_immediate")
         self.bit_length = BitVec(f"{id}_bitsize", 16)
+        self.index_register = String(f"{id}_index_register")
+        self.scale_factor = BitVec(f"{id}_scale_factor", 2)
+        self.displacement = BitVec(f"{id}_displacement", 32)
+
+        s.add(Or(*(self.type == t for t in parameter_types)))
 
         # Constrain width of immediates
         s.add(Implies(self.type == "IMMEDIATE8", self.immediate == ZeroExt(56, Extract(7, 0, self.immediate))))
@@ -152,7 +158,7 @@ class Operand:
                       self.bit_length == 32))
         s.add(Implies(Or(And(Not(self.memory), self.type == "GP_REGISTER_WORD"), self.type == "IMMEDIATE16"),
                       self.bit_length == 16))
-        s.add(Implies(Or(And(Not(self.memory), self.type == "GP_REGISTER_HWORD"), self.type == "IMMEDIATE64"),
+        s.add(Implies(Or(And(Not(self.memory), self.type == "GP_REGISTER_HWORD"), self.type == "IMMEDIATE8"),
                       self.bit_length == 8))
 
         # ...
@@ -163,6 +169,8 @@ class Operand:
         s.add(Implies(Or(*(self.type == r for r in
                            ["GP_REGISTER_QWORD", "GP_REGISTER_DWORD", "GP_REGISTER_WORD", "GP_REGISTER_HWORD"])),
                       And(self.immediate == 0, Not(self.is_immediate))))
+
+        s.add(Or(*(self.index_register == r for r in qword_reg_names)))
 
 
 def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorConstraints:
@@ -247,14 +255,6 @@ def init_registers(s: Solver, processor_state: ProcessorState, id) -> ProcessorC
     memory = dict()
 
     for address, value in processor_state.memory.items():
-        b = False
-        # Don't model overlapping addresses
-        # for address2, _ in processor_state.memory.items():
-        #    if address < address2 < (address + 8):
-        #        b = True
-        #        break
-        # if b:
-        #    continue
         b = BitVec(f"{id}_{hex(address)}", 64)
         memory[address] = b
         s.add(b == value)
@@ -275,5 +275,5 @@ class InstructionParameters:
         self.mnemonic = mnemonic
         s.add(Or(*([mnemonic == m for m in mnemonics])))
         self.delta_rip = BitVec(f"{id}_instrucion_size", 64)
-        s.add(self.delta_rip == self.post.regs["rip"] - self.pre.regs["rip"])
+        s.add(self.delta_rip == self.post_absolute.regs["rip"] - self.pre_absolute.regs["rip"])
         self.operands: list[Operand] = operands
