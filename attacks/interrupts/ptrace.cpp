@@ -16,7 +16,7 @@
 #include <unordered_map>
 #include <set>
 
-#define FIB_MAX 15
+#define FIB_MAX 5
 #define NUM_ITERATIONS 5000
 
 // Victim function
@@ -232,7 +232,7 @@ static int record_execution(FILE* f, const pid_t child_pid, const siginfo_t& sig
         return -1;
     }
 
-    if(post != expected_post && post_siginfo.si_signo == siginfo.si_signo && WSTOPSIG(status) == EIO) {
+    if((post != expected_post && post_siginfo.si_signo == siginfo.si_signo) || expected_post.memory.empty()) {
         pre_state.print(f, true);
         post.print(f, false);
         status = 1;

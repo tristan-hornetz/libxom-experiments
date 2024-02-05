@@ -6,11 +6,18 @@ operation_sub = lambda dest, src: dest - src
 
 def model_flag_adjustment(p: InstructionParameters, o_dest, o_src, width_dest, width_src, operation):
     o_src_ext = SignExt(width_dest - width_src, o_src)
+
+    of_src = ZeroExt(1, o_src_ext)
+    of_dest = ZeroExt(1, o_dest)
+
     return And(
         (p.post.regs["zf"] == 1) == (operation(o_dest, o_src_ext) == 0),
-        p.post.regs["sf"] == Extract(width_dest - 1, width_dest - 1, operation(o_dest, o_src_ext))
+        p.post.regs["sf"] == Extract(width_dest - 1, width_dest - 1, operation(o_dest, o_src_ext)),
+        p.post.regs["of"] == Extract(0, 0,
+                                     ((of_src ^ operation(of_dest, of_src)) & (of_dest ^ operation(of_dest, of_src))) >> width_dest
+                                     ),
     )
-    # Only zf and sf are modeled for now, as these are the only flags with an impact on jg
+    # Only these flags are modeled for now, as these are the only flags with an impact on jg
     # The others could be useful for add/sub, but the current model has sufficient information to tell
     # them apart in the POC code
 
@@ -23,7 +30,8 @@ def model_lea(p: InstructionParameters):
     p.s.add(Implies(p.mnemonic == "LEA", And(Not(p.operands[0].is_immediate), p.operands[0].memory,
                                              Not(p.operands[1].is_immediate), Not(p.operands[1].memory))))
 
-    p.s.add(Implies(p.mnemonic == "LEA", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "LEA", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "LEA", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -83,7 +91,8 @@ def model_mov(p: InstructionParameters):
          for n in qword_reg_names_norip + dword_reg_names_noeip + word_reg_names_noip + hword_reg_names
     ))))
 
-    p.s.add(Implies(p.mnemonic == "MOV", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "MOV", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "MOV", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
     
@@ -245,7 +254,8 @@ def model_add(p: InstructionParameters):
     p.s.add(Implies(And(p.mnemonic == "ADD", p.operands[0].is_immediate),
                     p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
 
-    p.s.add(Implies(p.mnemonic == "ADD", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "ADD", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "ADD", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -453,7 +463,8 @@ def model_sub(p: InstructionParameters):
     p.s.add(Implies(And(p.mnemonic == "SUB", p.operands[0].is_immediate),
                     p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
 
-    p.s.add(Implies(p.mnemonic == "SUB", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "SUB", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "SUB", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -662,7 +673,8 @@ def model_cmp(p: InstructionParameters):
     p.s.add(Implies(And(p.mnemonic == "CMP", p.operands[0].is_immediate),
                     p.delta_rip >= ZeroExt(48, (p.operands[0].bit_length >> 3) + 2)))
 
-    p.s.add(Implies(p.mnemonic == "CMP", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "CMP", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "CMP", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -854,7 +866,8 @@ def model_dec(p: InstructionParameters):
         p.s.add(Implies(p.mnemonic == "DEC", Not(o.used)))
     p.s.add(Implies(p.mnemonic == "DEC", p.delta_rip <= 3))
 
-    p.s.add(Implies(p.mnemonic == "DEC", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "DEC", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "DEC", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -928,7 +941,8 @@ def model_inc(p: InstructionParameters):
         p.s.add(Implies(p.mnemonic == "INC", Not(o.used)))
     p.s.add(Implies(p.mnemonic == "INC", p.delta_rip <= 3))
 
-    p.s.add(Implies(p.mnemonic == "INC", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "INC", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "INC", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 
@@ -1065,6 +1079,10 @@ def model_jump(p: InstructionParameters, mn: str, taken):
         p.post.regs["rip"] > p.pre.regs["rip"],
         p.delta_rip <= 6,
     )))
+    if not p.is_last_instruction:
+        p.s.add(Implies(And(p.mnemonic == mn, Not(taken)),
+                        p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]
+                        ))
 
 
 def model_jmp(p: InstructionParameters):
@@ -1073,7 +1091,7 @@ def model_jmp(p: InstructionParameters):
 
 def model_jg(p: InstructionParameters):
     jg_taken = Bool(f"{p.id}_jg_taken")
-    p.s.add(jg_taken == And(p.pre.regs["zf"] == 0 and p.pre.regs["sf"] == 0))
+    p.s.add(jg_taken == And(p.pre.regs["zf"] == 0, p.pre.regs["sf"] == p.pre.regs["of"]))
     model_jump(p, "JG", jg_taken)
 
 
@@ -1176,7 +1194,8 @@ def model_xchg(p: InstructionParameters):
         for o in p.operands
     )))))
 
-    p.s.add(Implies(p.mnemonic == "XCHG", p.pre.regs["rip"] < p.post.regs["rip"]))
+    p.s.add(Implies(p.mnemonic == "XCHG", And(p.pre.regs["rip"] < p.post.regs["rip"],
+                                             p.delta_rip <= 0xc)))
     if not p.is_last_instruction:
          p.s.add(Implies(p.mnemonic == "XCHG", p.delta_rip == p.next_instruction - p.pre_absolute.regs["rip"]))
 

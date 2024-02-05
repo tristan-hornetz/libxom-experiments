@@ -51,7 +51,7 @@ def run_solver(instruction_address, max_occurrences, next_instruction, is_last_i
             occurrences_modeled += 1
             if occurrences_modeled >= max_occurrences:
                 break
-            if i % 50 == 0:
+            if i % 50 or i in {2, 5, 10} == 0:
                 if solver.check() == unsat:
                     break
 
@@ -59,9 +59,6 @@ def run_solver(instruction_address, max_occurrences, next_instruction, is_last_i
         while solver.check() == sat and num_solutions < 10 and occurrences_modeled > 0:
             instr = f"{solver.model()[instruction_mnemonic]}".replace("\"", "").lower()
             op_strs = list()
-            is_imm = list()
-            imms = list()
-            regs = list()
             num_solutions += 1
             if instr == "lea":
                 instr += (f" {hex(int(str(solver.model()[instruction_operands[0].displacement])))} "
@@ -75,9 +72,6 @@ def run_solver(instruction_address, max_occurrences, next_instruction, is_last_i
             for i in range(len(instruction_operands)):
                 if not solver.model()[instruction_operands[i].used]:
                     break
-                is_imm.append(solver.model()[instruction_operands[i].is_immediate])
-                imms.append(solver.model()[instruction_operands[i].immediate])
-                regs.append(solver.model()[instruction_operands[i].register])
                 if solver.model()[instruction_operands[i].is_immediate]:
                     op_strs.append(str(hex(int(f"{solver.model()[instruction_operands[i].immediate]}"))))
                 else:
