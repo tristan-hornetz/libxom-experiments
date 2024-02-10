@@ -6,8 +6,6 @@ set(CMAKE_CXX_STANDARD 20)
 set(THREADS_PREFER_PTHREAD_FLAG ON)
 
 find_library(GMP_LIBRARIES gmp PATHS $ENV{GMPDIR} ${LIB_INSTALL_DIR})
-find_library(unicorn PATHS ${LIB_INSTALL_DIR})
-find_library(keystone PATHS ${LIB_INSTALL_DIR} "/usr/local/lib")
 
 find_package(Threads REQUIRED)
 find_package(OpenSSL REQUIRED)
