@@ -20,7 +20,6 @@ target_link_libraries(meltdown PUBLIC xom-static gcc)
 
 add_executable(spectre
     xom_tests/spectre.c
-    xom_tests/spectre_victim.s
+        xom_tests/spectre_asm.s
 )
-target_link_libraries(spectre PUBLIC xom-static gcc pthread)
-
+target_link_libraries(spectre PUBLIC xom-static)

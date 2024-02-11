@@ -8,4 +8,5 @@ cmake-build-debug
 venv
 .*
 attacks/interrupts/__pycache__
+attacks/interrupts/trace.py
 attacks/rop.py
