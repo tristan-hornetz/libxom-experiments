@@ -1,4 +1,4 @@
-.file "xom_tests/spectre_victim.s"
+.file "spectre_asm.s"
 
 .text
 .extern _cache_encode
@@ -51,3 +51,5 @@ attacker:
 
     lfence
     ret
+
+    shr %cl, %rsi

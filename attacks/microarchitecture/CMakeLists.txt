@@ -1,25 +1,20 @@
 include_directories("xom_tests/libcache")
 include_directories("xom_tests")
 
-add_executable(microarchitecture
-        xom_tests/microarchitecture.cpp
-        xom_tests/spectre/BTB.cpp
-        xom_tests/spectre/PHT.c
-        xom_tests/spectre/RSB.c
-        #xom_tests/meltdown.c
-        xom_tests/ridl.c
-        xom_tests/load_value.s
-        xom_tests/portsmash.c
-)
-target_link_libraries(microarchitecture PUBLIC xom-static gcc)
-
 add_executable(meltdown
-    xom_tests/meltdown.c
+    meltdown.c
 )
 target_link_libraries(meltdown PUBLIC xom-static gcc)
 
 add_executable(spectre
-    xom_tests/spectre.c
-        xom_tests/spectre_asm.s
+    spectre.c
+        spectre_asm.s
 )
 target_link_libraries(spectre PUBLIC xom-static)
+
+add_executable(port_contention
+    port_contention.c
+    port_profile.s
+)
+target_link_libraries(port_contention PUBLIC xom-static xom-aes-gcm-static)
+target_include_directories(port_contention PUBLIC ../demos/aes-gcm/include)
