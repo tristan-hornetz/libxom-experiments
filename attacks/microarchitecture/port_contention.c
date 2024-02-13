@@ -10,8 +10,8 @@
 
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 
-#define RUNS_PER_PORT   0x100
-#define NUM_SAMPLES     0x2000
+#define RUNS_PER_PORT  0x400
+#define NUM_SAMPLES    0x1000
 
 extern void contend_p0(unsigned long* out_buf, unsigned long num_entries);
 extern void contend_p1(unsigned long* out_buf, unsigned long num_entries);
