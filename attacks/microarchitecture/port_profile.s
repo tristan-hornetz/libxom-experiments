@@ -20,11 +20,9 @@ rdtsc
 shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
-jnz contend_p0_next
-ret
-contend_p0_next:
 mov %rax, (%rdi, %rsi, 8)
-jmp contend_p0
+jnz contend_p0
+ret
 
 .globl contend_p1
 contend_p1:
@@ -42,11 +40,9 @@ rdtsc
 shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
-jnz contend_p1_next
-ret
-contend_p1_next:
 mov %rax, (%rdi, %rsi, 8)
-jmp contend_p1
+jnz contend_p0
+ret
 
 .globl contend_p5
 contend_p5:
@@ -64,11 +60,9 @@ rdtsc
 shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
-jnz contend_p5_next
-ret
-contend_p5_next:
 mov %rax, (%rdi, %rsi, 8)
-jmp contend_p5
+jnz contend_p0
+ret
 
 .globl contend_p06
 contend_p06:
@@ -85,9 +79,7 @@ rdtsc
 shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
-jnz contend_p06_next
-ret
-contend_p06_next:
 mov %rax, (%rdi, %rsi, 8)
-jmp contend_p06
+jnz contend_p0
+ret
 

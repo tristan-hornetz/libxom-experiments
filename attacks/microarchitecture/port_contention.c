@@ -107,7 +107,7 @@ static void attacker() {
         }
         fclose(files[i]);
     }
-    printf("\r%u      \nDone!\n", j);
+    puts("Done");
 }
 
 
