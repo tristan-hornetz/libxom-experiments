@@ -10,8 +10,8 @@
 
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 
-#define RUNS_PER_PORT   0x1000
-#define NUM_SAMPLES     0x8000
+#define RUNS_PER_PORT   0x100
+#define NUM_SAMPLES     0x2000
 
 extern void contend_p0(unsigned long* out_buf, unsigned long num_entries);
 extern void contend_p1(unsigned long* out_buf, unsigned long num_entries);
@@ -75,9 +75,8 @@ static void __attribute__((noreturn)) victim() {
 }
 
 static void attacker() {
-    unsigned i, j, p;
-    static uint64_t accumulator[NUM_SAMPLES];
-    static uint64_t result_buffer[countof(accumulator)];
+    unsigned i, j;
+    static uint64_t result_buffer[NUM_SAMPLES];
     const static struct {
         const char* out_path;
         void (*contention_method)(unsigned long*, unsigned long);
@@ -88,8 +87,6 @@ static void attacker() {
             {"p06.bin", contend_p06},
     };
     FILE* files[countof(ports)];
-
-    memset(accumulator, 0, sizeof(accumulator));
 
     for(i = 0; i < countof(ports); i++)
         files[i] = fopen(ports[i].out_path, "w");
@@ -105,19 +102,11 @@ static void attacker() {
         for (j = 0; j < RUNS_PER_PORT; j++) {
             *sync_page = 1;
             ports[i].contention_method(result_buffer, countof(result_buffer));
-            for (p = 0; p < countof(accumulator); p++)
-                accumulator[p] += (result_buffer[countof(accumulator) - p - 1] & 0xffffffff) -
-                        (result_buffer[countof(accumulator) - p - 1] >> 32);
-            if(!(j % 100)){
-                printf("\r%u     ", j);
-                fflush(stdout);
-            }
+            fwrite(result_buffer, sizeof(*result_buffer), countof(result_buffer), files[i]);
             while(*sync_page) {asm volatile("lfence");}
         }
-        fwrite(accumulator, sizeof(*accumulator), countof(accumulator), files[i]);
         fclose(files[i]);
     }
-
     printf("\r%u      \nDone!\n", j);
 }
 
