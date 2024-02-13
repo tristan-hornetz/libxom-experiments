@@ -73,7 +73,7 @@ static void __attribute__((noreturn)) victim() {
 
 static void attacker() {
     unsigned i;
-    static uint64_t result_buffer[0x1000];
+    static uint64_t result_buffer[0x8000];
     const static struct {
         const char* out_path;
         void (*contention_method)(unsigned long*, unsigned long);
