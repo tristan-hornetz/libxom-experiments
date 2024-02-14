@@ -30,7 +30,7 @@ mfence
 rdtsc
 mfence
 mov %rax, %r11
-.rept 48
+.rept 64
 crc32 %r8, %r8
 crc32 %r9, %r9
 crc32 %r10, %r10
@@ -41,7 +41,7 @@ shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
 mov %rax, (%rdi, %rsi, 8)
-jnz contend_p0
+jnz contend_p1
 ret
 
 .globl contend_p5
@@ -61,7 +61,7 @@ shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
 mov %rax, (%rdi, %rsi, 8)
-jnz contend_p0
+jnz contend_p5
 ret
 
 .globl contend_p06
@@ -70,7 +70,7 @@ mfence
 rdtsc
 mfence
 mov %rax, %r11
-.rept 256
+.rept 192
 ror $2, %rdx
 ror $2, %rax
 .endr
@@ -80,6 +80,6 @@ shl $0x20, %r11
 or %r11, %rax 
 dec %rsi
 mov %rax, (%rdi, %rsi, 8)
-jnz contend_p0
+jnz contend_p06
 ret
 

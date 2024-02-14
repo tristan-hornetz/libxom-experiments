@@ -55,8 +55,6 @@ static __m128i getJ0(aes_gcm_context *restrict c, const __m128i H){
     return J0;
 }
 
-volatile void dddeeee() {asm volatile ("nop");}
-
 int aes_gcm_encrypt(aes_gcm_context *restrict c){
     __m128i H, J0, J1, S;
     size_t s, u, v;
