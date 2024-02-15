@@ -87,7 +87,7 @@ benchmark(primes){
 // Call a function containing only a RET instruction
 benchmark(access) {
     uint64_t timer;
-    const static unsigned num_repetitions = 1000, num_rounds = 100;
+    const static unsigned num_repetitions = 0x8000, num_rounds = 100;
     unsigned i, j;
     char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE);
@@ -178,7 +178,7 @@ benchmark(nop_slide) {
 // Randomly jump between pages
 benchmark(jumper) {
     const static size_t segment_size = (1 << 12) * PAGE_SIZE;
-    const static unsigned num_repetitions = 1000;
+    const static unsigned num_repetitions = 0x4000;
     uint64_t timer;
     uint64_t times[num_repetitions];
     uint8_t* jumper_segment = mmap(NULL, segment_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -223,7 +223,7 @@ benchmark(jumper) {
 
 // Encrypt data using AES
 benchmark(aes) {
-    const static unsigned num_repetitions = 1000;
+    const static unsigned num_repetitions = 0x10000;
     uint64_t timer;
     uint64_t times[num_repetitions];
     aes_uint128 iv = {.u64 = {0xcafe, 0xbabe}}, key = {.u64 = {0xdead, 0xbeef}}, tag = {.u64 = {0, 0}};

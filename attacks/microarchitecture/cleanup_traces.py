@@ -4,10 +4,10 @@ import matplotlib.pyplot as plt
 from numpy import copy
 from scipy import signal
 
-#define RUNS_PER_PORT  0x2000
-#define NUM_SAMPLES    200
+#define RUNS_PER_PORT  0x800
+#define NUM_SAMPLES    300
 
-RUNS_PER_PORT  = 0x400
+RUNS_PER_PORT  = 0x800
 NUM_SAMPLES    = 300
 CEIL = 512
 

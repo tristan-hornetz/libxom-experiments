@@ -10,10 +10,10 @@
 
 #define countof(x) (sizeof(x)/sizeof(*(x)))
 
-#define RUNS_PER_PORT  0x400
+#define RUNS_PER_PORT  0x800
 #define NUM_SAMPLES    300
 
-#define NUM_BLOCKS      0x80
+#define NUM_BLOCKS      0x100
 
 extern uintptr_t aes_gctr_linear(void *icb, void* x, void *y, unsigned int num_blocks);
 
@@ -71,13 +71,17 @@ static uint32_t get_sibling_cores(){
 
 // The victim simply waits for the attacker to synchronize, and then starts the encryption
 static void __attribute__((noreturn)) victim() {
+    unsigned int i;
     aes_uint128 icb = {.u64={0, 0}}, x[NUM_BLOCKS] = {{.u64={0, 0}},}, y[NUM_BLOCKS] = {{.u64={0, 0}},};
     *sync_page = 1;
     for(;;) {
+        i = 10;
         while (!*sync_page) { asm volatile("lfence");}
-        aes_gctr_linear(&icb, &x, &y, NUM_BLOCKS);
-        asm volatile(".rept 1024\nnop\nlfence\n.endr");
-        aes_gctr_linear(&icb, &x, &y, NUM_BLOCKS);
+        while(i--) {
+            asm volatile(".rept 512\nlfence\n.endr");
+            aes_gctr_linear(&icb, &x, &y, NUM_BLOCKS);
+            asm volatile(".rept 512\nlfence\n.endr");
+        }
         *sync_page = 0;
     }
 }

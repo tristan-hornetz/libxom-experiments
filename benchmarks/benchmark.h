@@ -124,4 +124,6 @@ int exit_utils(void);
 void flush_all(void* p, size_t size);
 void write_list(FILE*restrict fp, uint64_t * data, size_t len, char end_separator);
 
+#define powers2(X) \
+    X(1) X(2) X(4) X(8) X(16) X(32) X(64) X(128) X(256) X(512) X(1024) X(2048) X(4096)
 #endif

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include "benchmark.h"
@@ -23,7 +24,7 @@ benchmark(free##NUM_PAGES) {                                            \
 
 static int internal_benchmark_mmap_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 1000;
+    const static unsigned num_repetitions = 0x4000;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
@@ -69,7 +70,7 @@ static int internal_benchmark_mmap_n (FILE *restrict fp,
 
 static int internal_benchmark_lock_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 1000;
+    const static unsigned num_repetitions = 0x4000;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
@@ -108,7 +109,7 @@ static int internal_benchmark_lock_n (FILE *restrict fp,
 
 static int internal_benchmark_free_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 1000;
+    const static unsigned num_repetitions = 0x4000;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
@@ -133,12 +134,20 @@ static int internal_benchmark_free_n (FILE *restrict fp,
 
     for(i = 0; i < num_repetitions; i++) {
         if (xomfd < 0)
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE| PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         else
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE, xomfd, 0);
+            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE| PROT_EXEC, MAP_PRIVATE, xomfd, 0);
+        cmd.base_addr = (uintptr_t) buffer;
+
+        memset(buffer, 0xab, PAGE_SIZE * num_pages);
+        if(xomfd >= 0) {
+            cmd.cmd = MODXOM_CMD_LOCK;
+            write(xomfd, &cmd, sizeof(cmd));
+        }
 
         START_TIMER;
         if(xomfd >= 0) {
+            cmd.cmd = MODXOM_CMD_FREE;
             cmd.base_addr = (uintptr_t) buffer;
             write(xomfd, &cmd, sizeof(cmd));
         }
@@ -152,44 +161,6 @@ static int internal_benchmark_free_n (FILE *restrict fp,
     return 0;
 }
 
-mmap_benchmark(1)
-mmap_benchmark(2)
-mmap_benchmark(4)
-mmap_benchmark(8)
-mmap_benchmark(16)
-mmap_benchmark(32)
-mmap_benchmark(64)
-mmap_benchmark(128)
-mmap_benchmark(256)
-mmap_benchmark(512)
-mmap_benchmark(1024)
-mmap_benchmark(2048)
-mmap_benchmark(4096)
-
-lock_benchmark(1)
-lock_benchmark(2)
-lock_benchmark(4)
-lock_benchmark(8)
-lock_benchmark(16)
-lock_benchmark(32)
-lock_benchmark(64)
-lock_benchmark(128)
-lock_benchmark(256)
-lock_benchmark(512)
-lock_benchmark(1024)
-lock_benchmark(2048)
-lock_benchmark(4096)
-
-free_benchmark(1)
-free_benchmark(2)
-free_benchmark(4)
-free_benchmark(8)
-free_benchmark(16)
-free_benchmark(32)
-free_benchmark(64)
-free_benchmark(128)
-free_benchmark(256)
-free_benchmark(512)
-free_benchmark(1024)
-free_benchmark(2048)
-free_benchmark(4096)
+powers2(mmap_benchmark)
+powers2(lock_benchmark)
+powers2(free_benchmark)
