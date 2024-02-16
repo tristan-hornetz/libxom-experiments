@@ -2,6 +2,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include "libxom.h"
 #include "benchmark.h"
 #include "modxom.h"
 
@@ -29,11 +30,7 @@ static int internal_benchmark_mmap_n (FILE *restrict fp,
     uint64_t timer;
     uint64_t times[num_repetitions];
     void* buffer;
-    modxom_cmd cmd = {
-        .cmd = MODXOM_CMD_FREE,
-        .num_pages = num_pages,
-        .base_addr = 0
-    };
+    struct xombuf* xbuf;
 
     for(i = 0; i < num_repetitions; i++) {
         START_TIMER;
@@ -48,22 +45,14 @@ static int internal_benchmark_mmap_n (FILE *restrict fp,
 
     for(i = 0; i < num_repetitions; i++) {
         START_TIMER;
-        if (xomfd < 0)
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        else
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
+        xbuf = xom_alloc(PAGE_SIZE * num_pages);
         TIME_ELAPSED(timer);
         times[i] = timer;
 
-        if(!buffer || ~(uintptr_t)buffer)
+        if(!xbuf)
             return -1;
 
-        if(xomfd >= 0) {
-            cmd.base_addr = (uintptr_t) buffer;
-            write(xomfd, &cmd, sizeof(cmd));
-        }
-
-        munmap(buffer, PAGE_SIZE * num_pages);
+        xom_free(xbuf);
     }
     fprintf(fp, "mmap%u_times_xom = ", num_pages);
     write_list(fp, times, countof(times), '\n');
@@ -77,12 +66,7 @@ static int internal_benchmark_lock_n (FILE *restrict fp,
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
-    void* buffer;
-    modxom_cmd cmd = {
-        .cmd = MODXOM_CMD_FREE,
-        .num_pages = num_pages,
-        .base_addr = 0
-    };
+    struct xombuf* xbuf;
 
     if (xomfd < 0) {
         fprintf(fp, "# Error: This benchmark requires SLAT-based XOM.\n"
@@ -91,21 +75,17 @@ static int internal_benchmark_lock_n (FILE *restrict fp,
     }
 
     for(i = 0; i < num_repetitions; i++) {
-        buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
-        cmd.base_addr = (uintptr_t) buffer;
-        cmd.cmd = MODXOM_CMD_LOCK;
+        xbuf = xom_alloc(PAGE_SIZE * num_pages);
 
-        if(!buffer || ~(uintptr_t)buffer)
+        if(!xbuf)
             return -1;
 
         START_TIMER;
-        write(xomfd, &cmd, sizeof(cmd));
+        xom_lock(xbuf);
         TIME_ELAPSED(timer);
         times[i] = timer;
 
-        cmd.cmd = MODXOM_CMD_FREE;
-        write(xomfd, &cmd, sizeof(cmd));
-        munmap(buffer, PAGE_SIZE * num_pages);
+        xom_free(xbuf);
     }
     fprintf(fp, "lock%u_times_slat = ", num_pages);
     write_list(fp, times, countof(times), '\n');
