@@ -104,7 +104,6 @@ static int internal_benchmark_free_n (FILE *restrict fp,
 
     for(i = 0; i < num_repetitions; i++) {
         buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        memset(buffer, 0xab, PAGE_SIZE * num_pages);
         START_TIMER;
         munmap(buffer, PAGE_SIZE * num_pages);
         TIME_ELAPSED(timer);
@@ -120,7 +119,7 @@ static int internal_benchmark_free_n (FILE *restrict fp,
         if(!xbuf)
             return -1;
 
-        memset(*(void**)xbuf, 0xab, PAGE_SIZE * num_pages);
+        xom_lock(xbuf);
 
         START_TIMER;
         xom_free(xbuf);
