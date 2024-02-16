@@ -51,9 +51,12 @@ static int internal_benchmark_mmap_n (FILE *restrict fp,
         if (xomfd < 0)
             buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         else
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE, xomfd, 0);
+            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
         TIME_ELAPSED(timer);
         times[i] = timer;
+
+        if(!buffer || ~(uintptr_t)buffer)
+            return -1;
 
         if(xomfd >= 0) {
             cmd.base_addr = (uintptr_t) buffer;
@@ -88,9 +91,12 @@ static int internal_benchmark_lock_n (FILE *restrict fp,
     }
 
     for(i = 0; i < num_repetitions; i++) {
-        buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_EXEC, MAP_PRIVATE, xomfd, 0);
+        buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
         cmd.base_addr = (uintptr_t) buffer;
         cmd.cmd = MODXOM_CMD_LOCK;
+
+        if(!buffer || ~(uintptr_t)buffer)
+            return -1;
 
         START_TIMER;
         write(xomfd, &cmd, sizeof(cmd));
@@ -136,8 +142,11 @@ static int internal_benchmark_free_n (FILE *restrict fp,
         if (xomfd < 0)
             buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE| PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         else
-            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE| PROT_EXEC, MAP_PRIVATE, xomfd, 0);
+            buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE, MAP_PRIVATE, xomfd, 0);
         cmd.base_addr = (uintptr_t) buffer;
+
+        if(!buffer || ~(uintptr_t)buffer)
+            return -1;
 
         memset(buffer, 0xab, PAGE_SIZE * num_pages);
         if(xomfd >= 0) {
