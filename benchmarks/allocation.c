@@ -25,7 +25,7 @@ benchmark(free##NUM_PAGES) {                                            \
 
 static int internal_benchmark_mmap_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 0x4000;
+    const static unsigned num_repetitions = 0x400;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
@@ -62,7 +62,7 @@ static int internal_benchmark_mmap_n (FILE *restrict fp,
 
 static int internal_benchmark_lock_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 0x4000;
+    const static unsigned num_repetitions = 0x400;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
@@ -95,7 +95,7 @@ static int internal_benchmark_lock_n (FILE *restrict fp,
 
 static int internal_benchmark_free_n (FILE *restrict fp,
     const char *const restrict name, uint64_t timer_, const unsigned num_pages) {
-    const static unsigned num_repetitions = 0x4000;
+    const static unsigned num_repetitions = 0x400;
     unsigned i;
     uint64_t timer;
     uint64_t times[num_repetitions];
