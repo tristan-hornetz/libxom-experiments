@@ -103,7 +103,7 @@ static int internal_benchmark_free_n (FILE *restrict fp,
     struct xombuf* xbuf;
 
     for(i = 0; i < num_repetitions; i++) {
-        buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        buffer = mmap(NULL, PAGE_SIZE * num_pages, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         memset(buffer, 0xab, PAGE_SIZE * num_pages);
         START_TIMER;
         munmap(buffer, PAGE_SIZE * num_pages);
