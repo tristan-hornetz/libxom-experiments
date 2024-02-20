@@ -11,6 +11,7 @@
 
 // Micro
 extern_benchmark(access);
+extern_benchmark(access_flush);
 extern_benchmark(nop_slide);
 extern_benchmark(primes);
 extern_benchmark(jumper);
@@ -37,14 +38,15 @@ int main(int argc, char* argv[]){
         return 1;
 
     run_benchmark(access);
+    run_benchmark(access_flush);
     run_benchmark(nop_slide);
     run_benchmark(primes);
     run_benchmark(jumper);
     run_benchmark(aes);
 
-    powers2(run_mmap_benchmark)
-    powers2(run_lock_benchmark)
-    powers2(run_free_benchmark)
+    //powers2(run_mmap_benchmark)
+    //powers2(run_lock_benchmark)
+    //powers2(run_free_benchmark)
 
     exit_utils();
     return 0;

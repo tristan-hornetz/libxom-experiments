@@ -9,6 +9,7 @@
 #include "libxom.h"
 
 #define NUM_PRIMES 100000
+#define num_repetitions 1 << 17
 
 extern void jumper_link(void);
 extern void jumper_fun(void* base_address, uint16_t seed, uintptr_t num_jumps);
@@ -42,12 +43,12 @@ static __attribute__((aligned(PAGE_SIZE))) volatile void get_primes(uint32_t pri
 
 // Compute the first 1,000,000 primes
 benchmark(primes){
-    const static unsigned num_repetitions = 3;
+    const static unsigned prime_num_repetitions = 3;
     unsigned i;
     uint64_t timer;
     volatile void (*get_primes_xom)(uint32_t primes[], double (*)(double));
     struct xombuf* primes_xom_buf = xom_alloc(PAGE_SIZE);
-    uint64_t times[num_repetitions];
+    uint64_t times[prime_num_repetitions];
     volatile void (*get_primes_noxom)(uint32_t primes[], double (*)(double)) =
             mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
@@ -55,7 +56,7 @@ benchmark(primes){
     xom_write(primes_xom_buf, get_primes, PAGE_SIZE, 0);
     get_primes_xom = xom_lock(primes_xom_buf);
 
-    for(i = 0; i < num_repetitions; i++) {
+    for(i = 0; i < prime_num_repetitions; i++) {
         memset(primes_, 0, sizeof(primes_));
         START_TIMER;
         get_primes_xom(primes_, sqrt);
@@ -67,7 +68,7 @@ benchmark(primes){
     fprintf(fp, "prime_times_xom = ");
     write_list(fp, times, countof(times), '\n');
 
-    for(i = 0; i < num_repetitions; i++) {
+    for(i = 0; i < prime_num_repetitions; i++) {
         memset(primes_, 0, sizeof(primes_));
         START_TIMER;
         get_primes_noxom(primes_, sqrt);
@@ -87,7 +88,7 @@ benchmark(primes){
 // Call a function containing only a RET instruction
 benchmark(access) {
     uint64_t timer;
-    const static unsigned num_repetitions = 0x8000, num_rounds = 100;
+    const static unsigned num_rounds = 1;
     unsigned i, j;
     char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE);
@@ -100,6 +101,12 @@ benchmark(access) {
     xom_write(nop_slide_xom, nop_slide, PAGE_SIZE, 0);
     access_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom);
 
+     for(j = 0; j < num_rounds; j++) {
+         for (i = 0; i < num_repetitions; i++) {
+             access_fun();
+         }
+     }
+    
     fprintf(fp, "access_times_noxom = [\n");
     for(j = 0; j < num_rounds; j++) {
         for(i = 0; i< num_repetitions; i++) {
@@ -109,7 +116,6 @@ benchmark(access) {
             times[i] = timer;
         }
         write_list(fp, times, sizeof(times)/sizeof(*times), ',');
-        sched_yield();
     }
     fprintf(fp, "]\n\naccess_times_xom = [");
     fflush(fp);
@@ -121,7 +127,6 @@ benchmark(access) {
             times[i] = timer;
         }
         write_list(fp, times, countof(times), ',');
-        sched_yield();
     }
     fprintf(fp, "]\n");
     munmap(nop_slide, PAGE_SIZE);
@@ -129,10 +134,59 @@ benchmark(access) {
     return 0;
 }
 
+// Call a function containing only a RET instruction
+benchmark(access_flush) {
+    uint64_t timer;
+    const static unsigned num_rounds = 1;
+    unsigned i, j;
+    char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    struct xombuf* nop_slide_xom[num_repetitions];
+    void (*access_fun)(void) = ((void (*)(void))nop_slide);
+    void (*access_xom_fun)(void);
+    uint64_t times[num_repetitions];
+
+    for(i = 0; i < num_repetitions; i++)
+        nop_slide_xom[i] = xom_alloc(PAGE_SIZE);
+
+
+    nop_slide[0] = RET;
+
+    fprintf(fp, "access_times_noxom = [\n");
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i< num_repetitions; i++) {
+            asm volatile("clflush (%0)\nmfence" :: "r"(access_fun));
+            START_TIMER;
+            access_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, sizeof(times)/sizeof(*times), ',');
+    }
+    fprintf(fp, "]\n\naccess_times_xom = [");
+    fflush(fp);
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i < (num_repetitions / 2) + 1; i++){
+            xom_write(nop_slide_xom[i], nop_slide, 16, 0);
+            asm volatile("clflush (%0)\nmfence" :: "r"(*(void**)(nop_slide_xom[i])));
+            access_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom[i]);
+            START_TIMER;
+            access_xom_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, countof(times), ',');
+    }
+    fprintf(fp, "]\n");
+    munmap(nop_slide, PAGE_SIZE);
+    for(i = 0; i < num_repetitions; i++)
+        xom_free(nop_slide_xom[i]);
+    return 0;
+}
+
 // Execute a single-page nop slide
 benchmark(nop_slide) {
     uint64_t timer;
-    const static unsigned num_repetitions = 1000, num_rounds = 100;
+    const static unsigned num_rounds = 1;
     unsigned i, j;
     char *nop_slide = mmap(NULL, PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE);
@@ -155,7 +209,7 @@ benchmark(nop_slide) {
             times[i] = timer;
         }
         write_list(fp, times, sizeof(times)/sizeof(*times), ',');
-        sched_yield();
+        
     }
     fprintf(fp, "]\n\nnop_slide_times_xom = [");
     fflush(fp);
@@ -167,7 +221,7 @@ benchmark(nop_slide) {
             times[i] = timer;
         }
         write_list(fp, times, countof(times), ',');
-        sched_yield();
+        
     }
     fprintf(fp, "]\n");
     munmap(nop_slide, PAGE_SIZE);
@@ -178,7 +232,6 @@ benchmark(nop_slide) {
 // Randomly jump between pages
 benchmark(jumper) {
     const static size_t segment_size = (1 << 12) * PAGE_SIZE;
-    const static unsigned num_repetitions = 0x4000;
     uint64_t timer;
     uint64_t times[num_repetitions];
     uint8_t* jumper_segment = mmap(NULL, segment_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
@@ -223,7 +276,6 @@ benchmark(jumper) {
 
 // Encrypt data using AES
 benchmark(aes) {
-    const static unsigned num_repetitions = 0x10000;
     uint64_t timer;
     uint64_t times[num_repetitions];
     aes_uint128 iv = {.u64 = {0xcafe, 0xbabe}}, key = {.u64 = {0xdead, 0xbeef}}, tag = {.u64 = {0, 0}};
