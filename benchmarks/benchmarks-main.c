@@ -13,7 +13,7 @@
 extern_benchmark(access);
 extern_benchmark(access_flush);
 extern_benchmark(nop_slide);
-extern_benchmark(nop_slide_2_8);
+extern_benchmark(chain);
 extern_benchmark(primes);
 extern_benchmark(jumper);
 extern_benchmark(aes);
@@ -40,9 +40,9 @@ int main(int argc, char* argv[]){
         return 1;
 
     run_benchmark(access);
-    run_benchmark(access_flush);
+    //run_benchmark(access_flush);
     run_benchmark(nop_slide);
-    run_benchmark(nop_slide_2_8);
+    run_benchmark(chain);
     run_benchmark(primes);
     run_benchmark(jumper);
     run_benchmark(aes);
