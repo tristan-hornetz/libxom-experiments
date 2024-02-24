@@ -9,7 +9,7 @@
 #include "libxom.h"
 
 #define NUM_PRIMES 100000
-#define num_repetitions 1 << 17
+#define num_repetitions (1 << 17)
 
 extern void jumper_link(void);
 extern void jumper_fun(void* base_address, uint16_t seed, uintptr_t num_jumps);
@@ -222,6 +222,52 @@ benchmark(nop_slide) {
         }
         write_list(fp, times, countof(times), ',');
         
+    }
+    fprintf(fp, "]\n");
+    munmap(nop_slide, PAGE_SIZE);
+    xom_free(nop_slide_xom);
+    return 0;
+}
+
+#define NOPSL_SCALE 8
+benchmark(nop_slide_2_8) {
+    uint64_t timer;
+    const static unsigned num_rounds = 1;
+    unsigned i, j;
+    char *nop_slide = mmap(NULL, PAGE_SIZE * (1 << NOPSL_SCALE), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    struct xombuf* nop_slide_xom = xom_alloc(PAGE_SIZE * (1 << NOPSL_SCALE));
+    void (*nop_slide_fun)(void) = ((void (*)(void))nop_slide);
+    void (*nop_slide_xom_fun)(void);
+    uint64_t times[num_repetitions];
+
+
+    memset(nop_slide, NOP, PAGE_SIZE * (1 << NOPSL_SCALE));
+    nop_slide[(PAGE_SIZE * (1 << NOPSL_SCALE)) - 1] = RET;
+    xom_write(nop_slide_xom, nop_slide, PAGE_SIZE * (1 << NOPSL_SCALE), 0);
+    nop_slide_xom_fun = (void (*)(void)) xom_lock(nop_slide_xom);
+
+    fprintf(fp, "nop_slide_times_noxom = [\n");
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i< num_repetitions; i++) {
+            START_TIMER;
+            nop_slide_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, sizeof(times)/sizeof(*times), ',');
+
+    }
+    fprintf(fp, "]\n\nnop_slide_times_xom = [");
+    fflush(fp);
+    for(j = 0; j < num_rounds; j++) {
+        for(i = 0; i< num_repetitions; i++){
+            START_TIMER;
+            nop_slide_xom_fun();
+            TIME_ELAPSED(timer);
+            times[i] = timer;
+        }
+        write_list(fp, times, countof(times), ',');
+
     }
     fprintf(fp, "]\n");
     munmap(nop_slide, PAGE_SIZE);
