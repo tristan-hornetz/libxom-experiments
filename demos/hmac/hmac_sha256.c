@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <immintrin.h>
 #include "libxom.h"
 
 #define RED "\e[0;31m"
@@ -18,6 +19,15 @@ extern void __attribute__((section(".data"))) hmac256(
 
 extern void __attribute__((section(".data"))) hmac256_start();
 
+// Memory encryption key
+extern uint8_t memenc_key_lo;
+extern uint8_t memenc_key_hi;
+
+// Memory encryption IV
+extern uint8_t memenc_iv_lo;
+extern uint8_t memenc_iv_hi;
+
+// HMAC key
 extern uint8_t quad0_key_lo;
 extern uint8_t quad1_key_lo;
 extern uint8_t quad2_key_lo;
@@ -35,6 +45,10 @@ extern uint8_t quad3_key_hi;
 static keytype *const hmac_key_ptrs[] = {
         keyptr(quad0_key_lo), keyptr(quad1_key_lo), keyptr(quad2_key_lo), keyptr(quad3_key_lo),
         keyptr(quad0_key_hi), keyptr(quad1_key_hi), keyptr(quad2_key_hi), keyptr(quad3_key_hi),
+};
+
+static keytype *const aes_key_ptrs[] = {
+        keyptr(memenc_key_lo), keyptr(memenc_key_hi), keyptr(memenc_iv_lo), keyptr(memenc_iv_hi),
 };
 #undef keyptr
 
@@ -60,7 +74,7 @@ static size_t pad_message_alloc(const void *orig, void **padded_dest, size_t len
     return length_padded >> 6;
 }
 
-static void set_key(const uint8_t *key) {
+static void set_hmac_key(const uint8_t *key) {
     unsigned i, j;
 
     for (i = 0; i < countof(hmac_key_ptrs); i++) {
@@ -70,10 +84,19 @@ static void set_key(const uint8_t *key) {
     }
 }
 
-static void clear_key() {
+static void generate_memenc_keys(void) {
+    unsigned i;
+
+    for (i = 0; i < countof(aes_key_ptrs); i++)
+        _rdrand64_step((unsigned long long*) aes_key_ptrs[i]);
+}
+
+static void clear_keys() {
     unsigned i;
 
     for (i = 0; i < countof(hmac_key_ptrs); i++)
+        memset(hmac_key_ptrs[i], 0, sizeof(uint64_t));
+    for (i = 0; i < countof(aes_key_ptrs); i++)
         memset(hmac_key_ptrs[i], 0, sizeof(uint64_t));
 }
 
@@ -102,7 +125,6 @@ int main(int argc, char *argv[]) {
             return 1;
         case XOM_MODE_PKU:
             printf(STR_WARN "SLAT-based XOM is not supported on this system! Resorting to PKU, which is insecure...\n");
-        case XOM_MODE_SLAT:
         default:;
     }
 
@@ -119,11 +141,14 @@ int main(int argc, char *argv[]) {
     // Encode key into immediate instructions
     memset(key, 0, sizeof(key));
     memcpy(key, argv[1], min(strlen(argv[1]), sizeof(key)));
-    set_key(key);
+    set_hmac_key(key);
 
-    // Fill XOM buffer with code and remove key from readable memory
+    // Generate random keys for memory encryption
+    generate_memenc_keys();
+
+    // Fill XOM buffer with code and remove all keys from readable memory
     xom_write(xbuf, hmac256_start, PAGE_SIZE, 0);
-    clear_key();
+    clear_keys();
 
     // Lock code into XOM and get function pointer
     hmac256_xom = (void *) ((uint8_t *) xom_lock(xbuf) + (hmac256 - hmac256_start));
@@ -138,6 +163,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
+    asm volatile ("start_hmac:");
     // Compute HMAC
     hmac256_xom(padded_msg, block_count, hmac_dest);
 

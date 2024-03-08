@@ -1,7 +1,11 @@
 .file "hmac_sha256.s"
 
-// Based on "Intel SHA Extensions - New Instructions Supporting the Secure
+// SHA code is based on "Intel SHA Extensions - New Instructions Supporting the Secure
 // Hash Algorithm on Intel Architecture Processors" by Gulley et al., 2013
+
+////////////////////////
+// Register assignments
+////////////////////////
 
 .set msg, %xmm0
 .set state_lo, %xmm6
@@ -22,26 +26,31 @@
 .set inner_hash_backup, %ymm1
 .set inner_hash_backup_lo, %xmm1
 
+
+////////////////////////
+// Macros
+////////////////////////
+
 .macro load_128bit_constant, quad0, quad1, dest
-    mov $\quad0, %r15
-    movq %r15, %xmm2
-    mov $\quad1, %r15
-    movq %r15, %xmm3
+    mov $\quad0, %r14
+    movq %r14, %xmm2
+    mov $\quad1, %r14
+    movq %r14, %xmm3
     movlhps	%xmm3, %xmm2
     movdqa %xmm2, \dest
 .endm
 
 .macro load_256bit_constant_xmm, quad0, quad1, quad2, quad3, dest_lo, dest_hi
-    mov $\quad0, %r15
-    movq %r15, %xmm2
-    mov $\quad1, %r15
-    movq %r15, %xmm3
+    mov $\quad0, %r14
+    movq %r14, %xmm2
+    mov $\quad1, %r14
+    movq %r14, %xmm3
     movlhps	%xmm3, %xmm2
     movdqa %xmm2, \dest_lo
-    mov $\quad2, %r15
-    movq %r15, %xmm4
-    mov $\quad3, %r15
-    movq %r15, %xmm5
+    mov $\quad2, %r14
+    movq %r14, %xmm4
+    mov $\quad3, %r14
+    movq %r14, %xmm5
     movlhps	%xmm5,%xmm4
     movdqa %xmm4, \dest_hi
 .endm
@@ -66,6 +75,7 @@
     movq %r15, %xmm5
     movlhps	%xmm5,%xmm4
     vinserti128    $1, %xmm4, %ymm2, \dest
+    xor %r15, %r15
 .endm
 
 .macro roundconst_get, c_lolo, c_lohi, c_hilo, c_hihi, end_sym
@@ -75,12 +85,189 @@
     jmp \end_sym
 .endm
 
+
+// Place code into .data section, so that we can overwrite the keys
 .data
 .align 0x1000
+
+// This symbol only indicates the start of the memory range to be copied into XOM. Do not call.
 .globl hmac256_start
 hmac256_start:
 
-// if %r8b == 0 then ipad else opad
+
+////////////////////////
+// Memory encryption code
+////////////////////////
+
+// ymm0-5 remain unaffected
+.Lprime_memory_encryption:
+    // Load key from immediates
+    .globl memenc_key_lo
+    memenc_key_lo:
+    movq $0x123456789abcdef,%r15
+    movq   %r15,%xmm9
+    .globl memenc_key_hi
+    memenc_key_hi:
+    movq $0x123456789abcdef,%r15
+    movq   %r15,%xmm8
+    movlhps	%xmm8,%xmm9
+
+    // Load initial counter block from immediates
+    .globl memenc_iv_lo
+    memenc_iv_lo:
+    movq $0x123456789abcdef,%r15
+    movq   %r15,%xmm7
+    .globl memenc_iv_hi
+    memenc_iv_hi:
+    movq $0x123456789abcdef,%r15
+    movq   %r15,%xmm6
+    movlhps	%xmm6,%xmm7
+    vinserti128 $1, %xmm7, %ymm15, %ymm15
+
+    // Prepare for round key generation
+    movaps %xmm9, %xmm8
+    vinserti128 $1, %xmm9, %ymm10, %ymm10
+
+    aeskeygenassist $1, %xmm8, %xmm7
+    lea .Laespkeyr1(%rip), %rax
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr1:
+    vinserti128 $1, %xmm8, %ymm11, %ymm11
+    aeskeygenassist $2, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr2 - .Laespkeyr1)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr2:
+    vinserti128 $1, %xmm8, %ymm12, %ymm12
+    aeskeygenassist $4, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr3 - .Laespkeyr2)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr3:
+    vinserti128 $1, %xmm8, %ymm13, %ymm13
+    aeskeygenassist $8, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr4 - .Laespkeyr3)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr4:
+    vinserti128 $1, %xmm8, %ymm14, %ymm14
+    aeskeygenassist $16, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr5 - .Laespkeyr4)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr5:
+    movdqa %xmm8, %xmm10
+    aeskeygenassist $32, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr6 - .Laespkeyr5)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr6:
+    movdqa %xmm8, %xmm11
+    aeskeygenassist $64, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr7 - .Laespkeyr6)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr7:
+    movdqa %xmm8, %xmm12
+    aeskeygenassist $0x80, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr8 - .Laespkeyr7)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr8:
+    movdqa %xmm8, %xmm13
+    aeskeygenassist $0x1b, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr9 - .Laespkeyr8)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr9:
+    movdqa %xmm8, %xmm14
+    aeskeygenassist $0x36, %xmm8, %xmm7
+    .set pdiff, (.Laespkeyr10 - .Laespkeyr9)
+    addb $pdiff, %al
+    jmp .Laes_gctr_linear_prepare_roundkey_128
+.Laespkeyr10:
+    movdqa %xmm8, %xmm15
+    xor %r15, %r15
+    jmp *%r8
+
+.Laes_gctr_linear_prepare_roundkey_128:
+    pshufd $255, %xmm7, %xmm7
+    movdqa %xmm8, %xmm6
+    pslldq $4, %xmm6
+    pxor %xmm6, %xmm8
+    pslldq $4, %xmm6
+    pxor %xmm6, %xmm8
+    pslldq $4, %xmm6
+    pxor %xmm6, %xmm8
+    pxor %xmm7, %xmm8
+    jmp *%rax
+
+// dest addr: %rdi
+// For save: ymm0-2 remain unaffected
+// For load: ymm2 remains unaffected
+.Lsave_ymm0_unpack:
+    lea .Lsave_ymm0(%rip), %r8
+    jmp .Lunpack_round_keys
+.Lload_ymm0_unpack:
+    lea .Lload_ymm0(%rip), %r8
+
+.Lunpack_round_keys:
+    vpermq $0xee, %ymm15, %ymm3
+    vpermq $0xee, %ymm10, %ymm5
+    vpermq $0xee, %ymm11, %ymm6
+    vpermq $0xee, %ymm12, %ymm7
+    vpermq $0xee, %ymm13, %ymm8
+    vpermq $0xee, %ymm14, %ymm9
+    vpermq $0x44, %ymm10, %ymm10
+    vpermq $0x44, %ymm11, %ymm11
+    vpermq $0x44, %ymm12, %ymm12
+    vpermq $0x44, %ymm13, %ymm13
+    vpermq $0x44, %ymm14, %ymm14
+    vpermq $0x44, %ymm14, %ymm15
+    jmp *%r8
+
+.Lsave_ymm0:
+    lea .Lsave_ymm0_memaccess(%rip), %r8
+    jmp .Lencrypt_counter_block
+.Lload_ymm0:
+    lea .Lload_ymm0_memaccess(%rip), %r8
+.Lencrypt_counter_block:
+    // Encrypt the counter block
+
+    pxor %xmm4, %xmm4
+    movq %rdi, %xmm4
+    paddq %xmm3, %xmm4
+    vpermq $0x14, %ymm4, %ymm4
+    vpxor   %ymm5, %ymm4, %ymm4
+    vaesenc %ymm6, %ymm4, %ymm4
+    vaesenc %ymm7, %ymm4, %ymm4
+    vaesenc %ymm8, %ymm4, %ymm4
+    vaesenc %ymm9, %ymm4, %ymm4
+    vaesenc %ymm10, %ymm4, %ymm4
+    vaesenc %ymm11, %ymm4, %ymm4
+    vaesenc %ymm12, %ymm4, %ymm4
+    vaesenc %ymm13, %ymm4, %ymm4
+    vaesenc %ymm14, %ymm4, %ymm4
+    vaesenclast %ymm15, %ymm4, %ymm4
+
+    jmp *%r8
+
+.Lsave_ymm0_memaccess:
+    vpxor %ymm4, %ymm0, %ymm4
+    vmovdqa %ymm4, (%rdi)
+    jmp *%rax
+.Lload_ymm0_memaccess:
+    vmovdqa (%rdi), %ymm0
+    vpxor %ymm4, %ymm0, %ymm0
+    jmp *%rax
+
+
+////////////////////////
+// HMAC/SHA256 Code
+////////////////////////
+
+// Load and pad HMAC key
+// if %r8 == 0 then ipad else opad
 load_key:
     load_256bit_constant 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_lo, key_lo
     load_256bit_constant 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_hi, key_hi
@@ -98,7 +285,7 @@ load_key:
     jmp *%rax
 
 
-// round_index in %rcx
+// Get the next round constant
 add_Kt:
     lea .Ladd_Kt_rstart(%rip), %r10
     mov %rcx, %r11
@@ -132,7 +319,7 @@ add_Kt:
     jmp *%r8
 
 
-// state in xmm6, 7
+// Compress a single 512-bit block
 sha256_compress_block:
     xor %rcx, %rcx
     vinserti128 $0, state_lo, state_backup, state_backup
@@ -321,6 +508,80 @@ sha256_compress_block:
 
     jmp *%rax
 
+
+backup_internal_state:
+    // Move state into %ymm0
+    movdqa state_lo, %xmm0
+    vinserti128 $1, state_hi, %ymm0, %ymm0
+
+    // Load round keys
+    lea .Lbackup_internal_state_primed(%rip), %r8
+    jmp .Lprime_memory_encryption
+.Lbackup_internal_state_primed:
+
+    // Check if we were interrupted in the meantime
+    // If so, this is out last chance to restore the state
+    test %r15, %r15
+    jz .Lbackup_internal_state_begin_store
+    mov %r13, %r9
+    jmp restore_internal_state
+
+    // Save %ymm0 and address of current message block to memory
+.Lbackup_internal_state_begin_store:
+    mov %rdi, (%rsp)
+    xchg %rdi, %rdx
+    lea .Lbackup_internal_state_store_done(%rip), %rax
+    jmp .Lsave_ymm0_unpack
+.Lbackup_internal_state_store_done:
+    xchg %rdi, %rdx
+
+    // If we were not interrupted, all is good and we can continue
+    test %r15, %r15
+    jz .Lrestore_sha_registers
+
+    // If we were interrupted, we cannot recover
+    vzeroall
+    xor %rax, %rax
+    not %rax
+    pop %r13
+    pop %r14
+    pop %r15
+    leave
+    ret
+
+
+restore_internal_state:
+    // Restore address of message
+    mov (%rsp), %rdi
+
+    // Reset %r15
+    xor %r15, %r15
+
+    // Load round keys
+    lea .Lrestore_internal_state_primed(%rip), %r8
+    jmp .Lprime_memory_encryption
+.Lrestore_internal_state_primed:
+
+    // Load ymm0 from memory
+    xchg %rdi, %rdx
+    lea .Lrestore_internal_state_loaded(%rip), %rax
+    jmp .Lload_ymm0_unpack
+
+.Lrestore_internal_state_loaded:
+    xchg %rdi, %rdx
+
+    // If we were interrupted, we have to load the value again
+    test %r15, %r15
+    jnz restore_internal_state
+
+.Lrestore_sha_registers:
+    vextracti128 $1, %ymm0, state_hi
+    movdqa %xmm0, state_lo
+    load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
+    jmp *%r9
+
+
+// Main HMAC function
 // msg: %rdi (0x20 aligned, already padded)
 // num_block: %rsi
 // out: %rdx
@@ -329,6 +590,10 @@ hmac256:
     push %rbp
     mov %rsp, %rbp
     push %r15
+    push %r14
+    push %r13
+    lea .Lhmac_compression_start(%rip), %r13
+.Lhmac_start:
     vzeroall
 
     // Load initial hash state and shuffle mask
@@ -345,9 +610,17 @@ hmac256:
 	xor %r8, %r8
 	jmp load_key
 .Lhmac_compress_key:
-	.set next_r, (.Lhmac_compression_start - .Lhmac_compress_key)
+	.set next_r, (.Lhmac_inner_key_compressed - .Lhmac_compress_key)
 	add $next_r, %rax
 	jmp sha256_compress_block
+
+.Lhmac_inner_key_compressed:
+    test %r15, %r15
+    jnz .Lhmac_start
+
+    // Backup state after compressing inner key
+    mov %r13, %r9
+    jmp backup_internal_state
 
     // Compress message
 .Lhmac_compression_start:
@@ -357,6 +630,19 @@ hmac256:
     lea .Lhmac_compression_done(%rip), %rax
     jmp sha256_compress_block
 .Lhmac_compression_done:
+
+    // If we were interrupted, restore state
+    mov %r13, %r9
+    test %r15, %r15
+    jnz restore_internal_state
+
+    // Backup hash state every 256 blocks
+    test %sil, %sil
+    jnz .Lhmac_compression_next_round
+    lea .Lhmac_compression_next_round(%rip), %r9
+    jmp backup_internal_state
+
+.Lhmac_compression_next_round:
     add $0x40, %rdi
     dec %rsi
     jnz .Lhmac_compression_start
@@ -370,6 +656,19 @@ hmac256:
 
     pshufb ishuf_mask, state_lo
     pshufb ishuf_mask, state_hi
+
+    test %r15, %r15
+    jz .Lhmac_inner_hash_done
+    mov %r13, %r9
+    jmp restore_internal_state
+
+.Lhmac_inner_hash_done:
+    // Backup inner hash's final state
+    lea .Lhmac_start_outer_hash(%rip), %r9
+    jmp backup_internal_state
+
+.Lhmac_start_outer_hash:
+    lea .Lhmac_start_outer_hash(%rip), %r13
 
     // Backup inner hash
 	movdqa state_lo, inner_hash_backup_lo
@@ -418,9 +717,16 @@ hmac256:
     movdqa state_hi, (%rdx)
     movdqa state_lo, 0x10(%rdx)
 
+    // If we were interrupted while computing the outer hash, we have to start again
+    mov %r13, %r9
+    test %r15, %r15
+    jnz restore_internal_state
+
     vzeroall
+    xor %rax, %rax
+    pop %r13
+    pop %r14
     pop %r15
     leave
     ret
-
 
