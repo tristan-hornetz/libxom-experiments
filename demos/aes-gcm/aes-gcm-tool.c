@@ -231,6 +231,11 @@ static aes_fun_code* allocate_key_fun(){
     init_counter_mode_function(&fun_buf, &key);
     subpages = xom_alloc_subpages(getpagesize());
     ret = (aes_fun_code*) xom_fill_and_lock_subpages(subpages, sizeof(fun_buf), &fun_buf);
+    if (xom_mark_register_clear_subpage(subpages, 0, 0)){
+        printf(STR_WARN "Could not mark AES for register clearing.\n");
+        xom_free_all_subpages(subpages);
+        return NULL;
+    }
     memset(&fun_buf, 0, sizeof (fun_buf));
 
     return ret;
