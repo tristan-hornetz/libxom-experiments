@@ -183,12 +183,16 @@ hmac256_start:
     movdqa %xmm8, %xmm14
     aeskeygenassist $0x36, %xmm8, %xmm7
     .set pdiff, (.Laespkeyr10 - .Laespkeyr9)
-    addb $pdiff, %al
+    addw $pdiff, %ax
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr10:
     movdqa %xmm8, %xmm15
     xor %r15, %r15
-    jmp *%r8
+
+    test %r8, %r8
+    jz .Lbackup_internal_state_primed
+    jmp .Lrestore_internal_state_primed
+
 
 .Laes_gctr_linear_prepare_roundkey_128:
     pshufd $255, %xmm7, %xmm7
@@ -517,7 +521,7 @@ backup_internal_state:
     vinserti128 $1, state_hi, %ymm0, %ymm0
 
     // Load round keys
-    lea .Lbackup_internal_state_primed(%rip), %r8
+    xor %r8, %r8
     jmp .Lprime_memory_encryption
 .Lbackup_internal_state_primed:
 
@@ -560,7 +564,8 @@ restore_internal_state:
     xor %r15, %r15
 
     // Load round keys
-    lea .Lrestore_internal_state_primed(%rip), %r8
+    xor %r8, %r8
+    inc %r8
     jmp .Lprime_memory_encryption
 .Lrestore_internal_state_primed:
 
