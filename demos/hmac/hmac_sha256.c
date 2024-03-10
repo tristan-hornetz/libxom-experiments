@@ -163,7 +163,6 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    asm volatile ("start_hmac:");
     // Compute HMAC
     hmac256_xom(padded_msg, block_count, hmac_dest);
 

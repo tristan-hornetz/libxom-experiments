@@ -273,16 +273,18 @@ load_key:
     load_256bit_constant 0x1234567890abdef,0x1234567890abdef,0x1234567890abdef,0x1234567890abdef, block_hi, key_hi
     test %r8, %r8
     jz .Lload_key_ipad
-    mov $0x5c5c5c5c5c5c5c5c, %r8
+    mov $0x5c5c5c5c5c5c5c5c, %r9
     jmp .Lload_key_pad
 .Lload_key_ipad:
-    mov $0x3636363636363636, %r8
+    mov $0x3636363636363636, %r9
 .Lload_key_pad:
-    movq %r8, freeusexmm0
+    movq %r9, freeusexmm0
     vbroadcastss freeusexmm0, freeuseymm0
     vpxor freeuseymm0, block_lo, block_lo
     vpxor freeuseymm0, block_hi, block_hi
-    jmp *%rax
+    test %r8, %r8
+    jz .Lhmac_compress_key
+    jmp .Lhmac_compress_outer_key
 
 
 // Get the next round constant
@@ -606,12 +608,10 @@ hmac256:
 	pblendw		$0xf0, tmsg4, state_hi
 
     // Compress inner key
-	lea .Lhmac_compress_key(%rip), %rax
 	xor %r8, %r8
 	jmp load_key
 .Lhmac_compress_key:
-	.set next_r, (.Lhmac_inner_key_compressed - .Lhmac_compress_key)
-	add $next_r, %rax
+	lea .Lhmac_inner_key_compressed(%rip), %rax
 	jmp sha256_compress_block
 
 .Lhmac_inner_key_compressed:
@@ -683,7 +683,6 @@ hmac256:
 	pblendw		$0xf0, tmsg4, state_hi
 
 	// Compress outer key
-	lea .Lhmac_compress_outer_key(%rip), %rax
 	xor %r8, %r8
 	inc %r8
 	jmp load_key
