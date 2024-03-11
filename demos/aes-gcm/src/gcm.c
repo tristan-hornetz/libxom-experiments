@@ -51,7 +51,6 @@ static __m128i getJ0(aes_gcm_context *restrict c, const __m128i H){
     if(c->iv_len == (96 >> 3)){
         memset(&J0, 0, sizeof(J0));
         memcpy(&J0, c->iv, c->iv_len);
-        ((unsigned char*)&J0)[sizeof(J0) - 1] = 1;
     } else {
         s = (GCM_BLOCK_SIZE * (((c->iv_len << 3) / GCM_BLOCK_SIZE) + (((c->iv_len << 3) % GCM_BLOCK_SIZE) ? 1 : 0 ))) - (c->iv_len << 3);
         tbuf = malloc(c->iv_len + ((64 + s) >> 3) + sizeof(uint64_t) + 16);
@@ -83,7 +82,7 @@ int aes_gcm_encrypt(aes_gcm_context *restrict c){
     // Encrypt in counter mode
     do {
         J1 = J0;
-        add32_be(&J1, ((c->num_blocks - remaining)));
+        add32_be(&J1, ((c->num_blocks - remaining) + 1));
         remaining = gctr(c->gctr, &(((__m128i *restrict)c->plaintext)[c->num_blocks - remaining]), 
                                 &(((__m128i *restrict)c->ciphertext)[c->num_blocks - remaining]),
                                 J1, remaining);
@@ -133,7 +132,7 @@ int aes_gcm_decrypt(aes_gcm_context *restrict c){
     // Encrypt in counter mode
     do {
         J1 = J0;
-        add32_be(&J1, ((c->num_blocks - remaining)));
+        add32_be(&J1, ((c->num_blocks - remaining) + 1));
         remaining = gctr(c->gctr, &(((__m128i *restrict)c->ciphertext)[c->num_blocks - remaining]), 
                                 &(((__m128i *restrict)c->plaintext)[c->num_blocks - remaining]),
                                 J1, remaining);
