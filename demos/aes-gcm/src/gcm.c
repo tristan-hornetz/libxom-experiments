@@ -13,6 +13,19 @@
 const static uint64_t __attribute__((aligned(16))) zeroes_16[2] = {0, 0};
 extern void gfmul(__m128i a, __m128i b, __m128i* res);
 
+static inline void add32_be(__m128i* q, uint32_t n){
+    unsigned i;
+    uint32_t m;
+
+    for(i = 0; i < sizeof(*q); i++)
+        ((uint8_t*)&m)[i] = *(((uint8_t*)q) + sizeof(*q) - i - 1);
+
+    m += n;
+
+    for(i = 0; i < sizeof(*q); i++)
+        *(((uint8_t*)q) + sizeof(*q) - i - 1) = ((uint8_t*)&m)[i];
+}
+
 static __m128i ghash(const __m128i H, void *restrict in, const size_t num_blocks){
     size_t i;
     __m128i *restrict Xi = in;
@@ -27,7 +40,7 @@ static __m128i ghash(const __m128i H, void *restrict in, const size_t num_blocks
     return Y;
 }
 
-static uintptr_t gctr(gctr_fun gctr_instance, __m128i *restrict X, __m128i *restrict Y, const __m128i IPB, const size_t num_blocks){
+static inline uintptr_t gctr(gctr_fun gctr_instance, __m128i *restrict X, __m128i *restrict Y, const __m128i IPB, const size_t num_blocks){
     return gctr_instance((void*)&IPB, X, Y, num_blocks);
 }
 
@@ -70,11 +83,12 @@ int aes_gcm_encrypt(aes_gcm_context *restrict c){
     // Encrypt in counter mode
     do {
         J1 = J0;
-        add32(J1, ((c->num_blocks - remaining) + 1));
+        add32_be(&J1, ((c->num_blocks - remaining)));
         remaining = gctr(c->gctr, &(((__m128i *restrict)c->plaintext)[c->num_blocks - remaining]), 
                                 &(((__m128i *restrict)c->ciphertext)[c->num_blocks - remaining]),
                                 J1, remaining);
     } while(remaining);
+
 
     // Get required size s and 0-padding lengths u and v for auth tag generation
     u = (128 * c->num_blocks - c->num_blocks * GCM_BLOCK_SIZE) >> 3;
@@ -94,7 +108,7 @@ int aes_gcm_encrypt(aes_gcm_context *restrict c){
     *((uint64_t*) &tbuf[c->aad_size + v + (c->num_blocks * GCM_BLOCK_BYTES) + sizeof(uint64_t)]) = c->num_blocks * GCM_BLOCK_SIZE;
 
     // Hash the input buffer
-    S = ghash(H, tbuf, s / (GCM_BLOCK_SIZE >> 3) + ((s % (GCM_BLOCK_SIZE >> 3)) ? 1 : 0));
+    S = ghash(H, tbuf, s / (GCM_BLOCK_SIZE >> 3) + (((s % (GCM_BLOCK_SIZE >> 3)) ? 1 : 0)));
     free(tbuf);
 
     // Encrypt hash block to obtain auth tag
@@ -114,13 +128,12 @@ int aes_gcm_decrypt(aes_gcm_context *restrict c){
     while(c->gctr((void*) zeroes_16, (void*)zeroes_16, &H, 1));
 
     // Get initial counter block J0
-    J1 = J0 = getJ0(c, H);
-    inc32(J1);
+    J0 = getJ0(c, H);
 
     // Encrypt in counter mode
     do {
         J1 = J0;
-        add32(J1, ((c->num_blocks - remaining) + 1));
+        add32_be(&J1, ((c->num_blocks - remaining)));
         remaining = gctr(c->gctr, &(((__m128i *restrict)c->ciphertext)[c->num_blocks - remaining]), 
                                 &(((__m128i *restrict)c->plaintext)[c->num_blocks - remaining]),
                                 J1, remaining);

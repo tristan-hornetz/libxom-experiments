@@ -38,6 +38,9 @@ static int parse_u128(const char* restrict in, aes_uint128 *restrict out){
     size_t slen;
     char padded_input[2 * sizeof(aes_uint128) + 1] = {0}, b1[17] = {0};
 
+    if(!in || !out)
+        return -1;
+
     memset(out, 0, sizeof(*out));
 
     slen = strlen(in);
@@ -200,10 +203,10 @@ static int write_output(const ssize_t size, const char* restrict output){
     return status;
 }
 
-static aes_fun_code* allocate_key_fun_noslat(){
-    aes_fun_code*  ret;
+static void* allocate_key_fun_noslat(){
+    void*  ret;
 
-    ret = (aes_fun_code*) mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    ret = mmap(NULL, getpagesize(), PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if(!ret || !~(uintptr_t)ret)
         return NULL;
 
@@ -214,9 +217,10 @@ static aes_fun_code* allocate_key_fun_noslat(){
 
 }
 
-static aes_fun_code* allocate_key_fun(){
-    aes_fun_code fun_buf, *ret;
+static void* allocate_key_fun(){
+    void *ret;
     const int xom_mode = get_xom_mode();
+    unsigned char fun_buf[AES_FUN_SIZE];
 
     if(!xom_mode){
         fprintf(stderr, STR_ERR "XOM is not supported on this system!\n");
@@ -228,15 +232,15 @@ static aes_fun_code* allocate_key_fun(){
         return allocate_key_fun_noslat();
     }
 
-    init_counter_mode_function(&fun_buf, &key);
+    init_counter_mode_function(fun_buf, &key);
     subpages = xom_alloc_subpages(getpagesize());
-    ret = (aes_fun_code*) xom_fill_and_lock_subpages(subpages, sizeof(fun_buf), &fun_buf);
+    ret = xom_fill_and_lock_subpages(subpages, sizeof(fun_buf), fun_buf);
     if (xom_mark_register_clear_subpage(subpages, 0, 0)){
         printf(STR_WARN "Could not mark AES for register clearing.\n");
         xom_free_all_subpages(subpages);
         return NULL;
     }
-    memset(&fun_buf, 0, sizeof (fun_buf));
+    memset(fun_buf, 0, sizeof(fun_buf));
 
     return ret;
 }
@@ -246,7 +250,7 @@ int main(int argc, char *argv[]) {
     char* input = NULL, *output = NULL;
     ssize_t input_size;
     aes_gcm_context context;
-    aes_fun_code* key_fun;
+    void* key_fun;
 
     status = parse_args(argc, argv);
     if (status < 0)
@@ -277,7 +281,7 @@ int main(int argc, char *argv[]) {
         .aad_size = 0,
         .tag = (char *restrict) &tag,
         .iv = (char *restrict) &iv,
-        .iv_len = sizeof (iv),
+        .iv_len = sizeof(iv),
     };
 
     if(enc)

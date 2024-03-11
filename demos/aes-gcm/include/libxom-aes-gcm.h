@@ -29,7 +29,7 @@ struct aes_gcm_context {
     size_t iv_len;
 } typedef aes_gcm_context;
 
-void init_counter_mode_function(aes_fun_code* const dest_code, aes_uint128* key_src);
+void init_counter_mode_function(void* dest_code, aes_uint128* key_src);
 
 int aes_gcm_encrypt(aes_gcm_context *restrict c);
 int aes_gcm_decrypt(aes_gcm_context *restrict c);
