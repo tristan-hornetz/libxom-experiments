@@ -12,3 +12,4 @@ target_compile_options(xom_demo_features PUBLIC "-fPIC;-fno-omit-frame-pointer")
 
 add_subdirectory(aes-gcm)
 add_subdirectory(hmac)
+add_subdirectory(password-check)
