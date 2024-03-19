@@ -105,7 +105,9 @@ int main(int argc, char *argv[]) {
     uint8_t __attribute__((aligned(0x20))) hmac_dest[0x20] = {0,};
     uint8_t *padded_msg = NULL;
     uint8_t key[64];
-    size_t block_count;
+    size_t block_count, msg_size;
+    char *unpadded;
+    FILE* src_file;
 
     struct xombuf *xbuf;
     void (*hmac256_xom)(void *padded_msg, size_t block_count, void *out);
@@ -128,10 +130,40 @@ int main(int argc, char *argv[]) {
         default:;
     }
 
+    unpadded = argv[2];
+    msg_size = strlen(unpadded);
+    if(!strcmp(unpadded, "-f")){
+        if(argc <= 3){
+            puts("Missing file path!");
+            return 1;
+        }
+
+        src_file = fopen(argv[3], "r");
+        if(!src_file || !~(uintptr_t)src_file) {
+            puts("Could not open source file path!");
+            return 1;
+        }
+
+        fseek(src_file, 0, SEEK_END);
+        msg_size = ftell(src_file);
+        rewind(src_file);
+
+        unpadded = malloc(msg_size);
+
+        if(fread(unpadded, msg_size, 1, src_file) != 1){
+            puts("Could not read source file!");
+            return 1;
+        }
+
+        fclose(src_file);
+    }
+
     // Pad input for SHA256
-    block_count = pad_message_alloc(argv[2], (void **) &padded_msg, strlen(argv[2]));
+    block_count = pad_message_alloc(unpadded, (void **) &padded_msg, msg_size);
     if (!padded_msg)
         return 1;
+
+    puts("Successfully loaded input file!");
 
     // Allocate XOM buffer
     xbuf = xom_alloc(PAGE_SIZE);
@@ -173,6 +205,8 @@ int main(int argc, char *argv[]) {
     puts("");
 
     // Cleanup
+    if(unpadded != argv[2])
+        free(unpadded);
     free(padded_msg);
     xom_free(xbuf);
     return 0;

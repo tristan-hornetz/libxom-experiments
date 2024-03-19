@@ -79,7 +79,6 @@
 .endm
 
 .macro roundconst_get, c_lolo, c_lohi, c_hilo, c_hihi, end_sym
-.align 0x20
     movq $0x\c_lohi\c_lolo, %r10
     movq $0x\c_hihi\c_hilo, %r11
     jmp \end_sym
@@ -129,61 +128,52 @@ hmac256_start:
     vinserti128 $1, %xmm9, %ymm10, %ymm10
 
     aeskeygenassist $1, %xmm8, %xmm7
-    lea .Laespkeyr1(%rip), %rax
+    mov $1, %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr1:
     vinserti128 $1, %xmm8, %ymm11, %ymm11
     aeskeygenassist $2, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr2 - .Laespkeyr1)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr2:
     vinserti128 $1, %xmm8, %ymm12, %ymm12
     aeskeygenassist $4, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr3 - .Laespkeyr2)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr3:
     vinserti128 $1, %xmm8, %ymm13, %ymm13
     aeskeygenassist $8, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr4 - .Laespkeyr3)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr4:
     vinserti128 $1, %xmm8, %ymm14, %ymm14
     aeskeygenassist $16, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr5 - .Laespkeyr4)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr5:
     movdqa %xmm8, %xmm10
     aeskeygenassist $32, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr6 - .Laespkeyr5)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr6:
     movdqa %xmm8, %xmm11
     aeskeygenassist $64, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr7 - .Laespkeyr6)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr7:
     movdqa %xmm8, %xmm12
     aeskeygenassist $0x80, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr8 - .Laespkeyr7)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr8:
     movdqa %xmm8, %xmm13
     aeskeygenassist $0x1b, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr9 - .Laespkeyr8)
-    addb $pdiff, %al
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr9:
     movdqa %xmm8, %xmm14
     aeskeygenassist $0x36, %xmm8, %xmm7
-    .set pdiff, (.Laespkeyr10 - .Laespkeyr9)
-    addw $pdiff, %ax
+    inc %al
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr10:
     movdqa %xmm8, %xmm15
@@ -204,16 +194,36 @@ hmac256_start:
     pslldq $4, %xmm6
     pxor %xmm6, %xmm8
     pxor %xmm7, %xmm8
-    jmp *%rax
+    mov %al, %cl
+    dec %cl
+    jz .Laespkeyr1
+    dec %cl
+    jz .Laespkeyr2
+    dec %cl
+    jz .Laespkeyr3
+    dec %cl
+    jz .Laespkeyr4
+    dec %cl
+    jz .Laespkeyr5
+    dec %cl
+    jz .Laespkeyr6
+    dec %cl
+    jz .Laespkeyr7
+    dec %cl
+    jz .Laespkeyr8
+    dec %cl
+    jz .Laespkeyr9
+    dec %cl
+    jz .Laespkeyr10
 
 // dest addr: %rdi
 // For save: ymm0-2 remain unaffected
 // For load: ymm2 remains unaffected
 .Lsave_ymm0_unpack:
-    lea .Lsave_ymm0(%rip), %r8
+    xor %r8, %r8
     jmp .Lunpack_round_keys
 .Lload_ymm0_unpack:
-    lea .Lload_ymm0(%rip), %r8
+    mov $1, %r8
 
 .Lunpack_round_keys:
     vpermq $0xee, %ymm15, %ymm3
@@ -228,13 +238,14 @@ hmac256_start:
     vpermq $0x44, %ymm13, %ymm13
     vpermq $0x44, %ymm14, %ymm14
     vpermq $0x44, %ymm14, %ymm15
-    jmp *%r8
+    test %r8, %r8
+    jnz .Lload_ymm0
 
 .Lsave_ymm0:
-    lea .Lsave_ymm0_memaccess(%rip), %r8
+    xor %r8, %r8
     jmp .Lencrypt_counter_block
 .Lload_ymm0:
-    lea .Lload_ymm0_memaccess(%rip), %r8
+    mov $1, %r8
 .Lencrypt_counter_block:
     // Encrypt the counter block
 
@@ -253,17 +264,23 @@ hmac256_start:
     vaesenc %ymm13, %ymm4, %ymm4
     vaesenc %ymm14, %ymm4, %ymm4
     vaesenclast %ymm15, %ymm4, %ymm4
-
-    jmp *%r8
+    test %r8, %r8
+    jnz .Lload_ymm0_memaccess
 
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
+    mov %rdi, (%rdi)
+    sfence
     vmovdqa %ymm4, (%rdi)
-    jmp *%rax
+    jmp .Lymm0_crypt_return
 .Lload_ymm0_memaccess:
     vmovdqa (%rdi), %ymm0
     vpxor %ymm4, %ymm0, %ymm0
-    jmp *%rax
+.Lymm0_crypt_return:
+    mfence
+    dec %al
+    jz .Lbackup_internal_state_store_done
+    jmp .Lrestore_internal_state_loaded
 
 
 ////////////////////////
@@ -292,29 +309,37 @@ load_key:
 
 
 // Get the next round constant
-add_Kt:
-    lea .Ladd_Kt_rstart(%rip), %r10
-    mov %rcx, %r11
-    shl $5, %r11
-    add %r11, %r10
-    jmp *%r10
-    .align 0x20
-.Ladd_Kt_rstart:
+.Lrcget_0:
     roundconst_get 428a2f98,71374491,b5c0fbcf,e9b5dba5,.Ladd_Kt_leave
+.Lrcget_1:
     roundconst_get 3956c25b,59f111f1,923f82a4,ab1c5ed5,.Ladd_Kt_leave
+.Lrcget_2:
     roundconst_get d807aa98,12835b01,243185be,550c7dc3,.Ladd_Kt_leave
+.Lrcget_3:
     roundconst_get 72be5d74,80deb1fe,9bdc06a7,c19bf174,.Ladd_Kt_leave
+.Lrcget_4:
     roundconst_get e49b69c1,efbe4786,0fc19dc6,240ca1cc,.Ladd_Kt_leave
+.Lrcget_5:
     roundconst_get 2de92c6f,4a7484aa,5cb0a9dc,76f988da,.Ladd_Kt_leave
+.Lrcget_6:
     roundconst_get 983e5152,a831c66d,b00327c8,bf597fc7,.Ladd_Kt_leave
+.Lrcget_7:
     roundconst_get c6e00bf3,d5a79147,06ca6351,14292967,.Ladd_Kt_leave
+.Lrcget_8:
     roundconst_get 27b70a85,2e1b2138,4d2c6dfc,53380d13,.Ladd_Kt_leave
+.Lrcget_9:
     roundconst_get 650a7354,766a0abb,81c2c92e,92722c85,.Ladd_Kt_leave
+.Lrcget_a:
     roundconst_get a2bfe8a1,a81a664b,c24b8b70,c76c51a3,.Ladd_Kt_leave
+.Lrcget_b:
     roundconst_get d192e819,d6990624,f40e3585,106aa070,.Ladd_Kt_leave
+.Lrcget_c:
     roundconst_get 19a4c116,1e376c08,2748774c,34b0bcb5,.Ladd_Kt_leave
+.Lrcget_d:
     roundconst_get 391c0cb3,4ed8aa4a,5b9cca4f,682e6ff3,.Ladd_Kt_leave
+.Lrcget_e:
     roundconst_get 748f82ee,78a5636f,84c87814,8cc70208,.Ladd_Kt_leave
+.Lrcget_f:
     roundconst_get 90befffa,a4506ceb,bef9a3f7,c67178f2,.Ladd_Kt_leave
 .Ladd_Kt_leave:
     movq %r10, freeusexmm0
@@ -322,7 +347,39 @@ add_Kt:
     movlhps freeusexmm1,freeusexmm0
     paddd freeusexmm0, msg
     inc %rcx
-    jmp *%r8
+    mov %cl, %r8b
+    dec %r8b
+    jz .Lloadroundconst0
+    dec %r8b
+    jz .Lloadroundconst1
+    dec %r8b
+    jz .Lloadroundconst2
+    dec %r8b
+    jz .Lloadroundconst3
+    dec %r8b
+    jz .LloadroundconstU1
+    dec %r8b
+    jz .LloadroundconstU2
+    dec %r8b
+    jz .LloadroundconstU3
+    dec %r8b
+    jz .LloadroundconstU4
+    dec %r8b
+    jz .LloadroundconstU1
+    dec %r8b
+    jz .LloadroundconstU2
+    dec %r8b
+    jz .LloadroundconstU3
+    dec %r8b
+    jz .LloadroundconstU4
+    dec %r8b
+    jz .LloadroundconstF1
+    dec %r8b
+    jz .LloadroundconstF2
+    dec %r8b
+    jz .LloadroundconstF3
+    jmp .LloadroundconstF4
+
 
 
 // Compress a single 512-bit block
@@ -335,8 +392,7 @@ sha256_compress_block:
     vextracti128 $0, block_lo, msg
     pshufb ishuf_mask, msg
     movdqa msg, tmsg0
-    lea .Lloadroundconst0(%rip), %r8
-    jmp add_Kt
+    jmp .Lrcget_0
 .Lloadroundconst0:
     sha256rnds2	state_lo, state_hi
     pshufd $0x0e, msg, msg
@@ -346,9 +402,7 @@ sha256_compress_block:
     vextracti128 $1, block_lo, msg
     pshufb ishuf_mask, msg
     movdqa msg, tmsg1
-    .set next_r, (.Lloadroundconst1 - .Lloadroundconst0)
-    add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_1
 .Lloadroundconst1:
     sha256rnds2	state_lo, state_hi
     pshufd 		$0x0e, msg, msg
@@ -359,9 +413,7 @@ sha256_compress_block:
     vextracti128 $0, block_hi, msg
     pshufb ishuf_mask, msg
     movdqa msg, tmsg2
-    .set next_r, (.Lloadroundconst2 - .Lloadroundconst1)
-    add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_2
 .Lloadroundconst2:
     sha256rnds2	state_lo, state_hi
     pshufd 		$0x0e, msg, msg
@@ -372,9 +424,7 @@ sha256_compress_block:
     vextracti128 $1, block_hi, msg
     pshufb ishuf_mask, msg
     movdqa msg, tmsg3
-    .set next_r, (.Lloadroundconst3 - .Lloadroundconst2)
-    add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_3
 .Lloadroundconst3:
     sha256rnds2	state_lo, state_hi
     movdqa tmsg3, tmsg4
@@ -385,14 +435,16 @@ sha256_compress_block:
     sha256rnds2	state_hi, state_lo
     sha256msg1 tmsg3, tmsg2
 
-    mov $2, %r9
+    mov $2, %r9b
 .Lloop_upper_rounds:
+    dec %r9b
 
     /* Rounds 16-19 */
     /* Rounds 32-35 */
     movdqa tmsg0, msg
-    lea .LloadroundconstU1(%rip), %r8
-    jmp add_Kt
+    test %r9b, %r9b
+    jnz .Lrcget_4
+    jmp .Lrcget_8
 .LloadroundconstU1:
     sha256rnds2	state_lo, state_hi
     movdqa tmsg0, tmsg4
@@ -406,9 +458,9 @@ sha256_compress_block:
     /* Rounds 20-23 */
     /* Rounds 36-39 */
     movdqa tmsg1, msg
-    .set next_r, (.LloadroundconstU2 - .LloadroundconstU1)
-    add $next_r, %r8
-    jmp add_Kt
+    test %r9b, %r9b
+    jnz .Lrcget_5
+    jmp .Lrcget_9
 .LloadroundconstU2:
     sha256rnds2	state_lo, state_hi
 	movdqa tmsg1, tmsg4
@@ -422,9 +474,9 @@ sha256_compress_block:
     /* Rounds 24-27 */
     /* Rounds 40-43 */
     movdqa tmsg2, msg
-    .set next_r, (.LloadroundconstU3 - .LloadroundconstU2)
-    add $next_r, %r8
-    jmp add_Kt
+    test %r9b, %r9b
+    jnz .Lrcget_6
+    jmp .Lrcget_a
 .LloadroundconstU3:
     sha256rnds2	state_lo, state_hi
 	movdqa tmsg2, tmsg4
@@ -438,9 +490,9 @@ sha256_compress_block:
     /* Rounds 28-31 */
     /* Rounds 44-47 */
     movdqa tmsg3, msg
-    .set next_r, (.LloadroundconstU4 - .LloadroundconstU3)
-    add $next_r, %r8
-    jmp add_Kt
+    test %r9b, %r9b
+    jnz .Lrcget_7
+    jmp .Lrcget_b
 .LloadroundconstU4:
     sha256rnds2	state_lo, state_hi
 	movdqa tmsg3, tmsg4
@@ -451,14 +503,13 @@ sha256_compress_block:
 	sha256rnds2	state_hi, state_lo
 	sha256msg1 tmsg3, tmsg2
 
-    dec %r9
+    test %r9b, %r9b
     jnz .Lloop_upper_rounds
+
 
     /* Rounds 48-51 */
     movdqa tmsg0, msg
-    .set next_r, (.LloadroundconstF1 - .LloadroundconstU4)
-    add $next_r, %r8
-    jmp add_Kt
+   jmp .Lrcget_c
 .LloadroundconstF1:
     sha256rnds2	state_lo, state_hi
 	movdqa tmsg0, tmsg4
@@ -471,9 +522,7 @@ sha256_compress_block:
 
 	/* Rounds 52-55 */
 	movdqa tmsg1, msg
-    .set next_r, (.LloadroundconstF2 - .LloadroundconstF1)
-    add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_d
 .LloadroundconstF2:
     sha256rnds2 state_lo, state_hi
 	movdqa tmsg1, tmsg4
@@ -485,9 +534,7 @@ sha256_compress_block:
 
     /* Rounds 56-59 */
 	movdqa tmsg2, msg
-	.set next_r, (.LloadroundconstF3 - .LloadroundconstF2)
-	add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_e
 .LloadroundconstF3:
     sha256rnds2	state_lo, state_hi
 	movdqa tmsg2, tmsg4
@@ -499,9 +546,7 @@ sha256_compress_block:
 
     /* Rounds 60-63 */
     movdqa tmsg3, msg
-    .set next_r, (.LloadroundconstF4 - .LloadroundconstF3)
-	add $next_r, %r8
-    jmp add_Kt
+    jmp .Lrcget_f
 .LloadroundconstF4:
     sha256rnds2	state_lo, state_hi
     pshufd $0x0e, msg, msg
@@ -512,7 +557,13 @@ sha256_compress_block:
     paddd state_backup_lo, state_lo
     paddd freeusexmm0, state_hi
 
-    jmp *%rax
+    dec %al
+    jz .Lhmac_inner_key_compressed
+    dec %al
+    jz .Lhmac_compression_done
+    dec %al
+    jz .Lhmac_compress_outer_key_done
+    jmp .Lhmac_leave
 
 
 backup_internal_state:
@@ -534,9 +585,12 @@ backup_internal_state:
 
     // Save %ymm0 and address of current message block to memory
 .Lbackup_internal_state_begin_store:
+    // Saving the block counter to memory is okay, because it is not secret and
+    // any modifications to it can at worst modify the length of the authenticated message,
+    // something which the user can do anyway
     mov %rdi, (%rsp)
     xchg %rdi, %rdx
-    lea .Lbackup_internal_state_store_done(%rip), %rax
+    mov $1, %al
     jmp .Lsave_ymm0_unpack
 .Lbackup_internal_state_store_done:
     xchg %rdi, %rdx
@@ -545,7 +599,7 @@ backup_internal_state:
     test %r15, %r15
     jz .Lrestore_sha_registers
 
-    // If we were interrupted, we cannot recover
+    // If we were interrupted, we cannot recover, so return -1
     vzeroall
     xor %rax, %rax
     not %rax
@@ -571,7 +625,7 @@ restore_internal_state:
 
     // Load ymm0 from memory
     xchg %rdi, %rdx
-    lea .Lrestore_internal_state_loaded(%rip), %rax
+    mov $2, %al
     jmp .Lload_ymm0_unpack
 
 .Lrestore_internal_state_loaded:
@@ -585,7 +639,14 @@ restore_internal_state:
     vextracti128 $1, %ymm0, state_hi
     movdqa %xmm0, state_lo
     load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
-    jmp *%r9
+    
+    dec %r9b
+    jz .Lhmac_compression_next_round
+    dec %r9b
+    jz .Lhmac_start_outer_hash
+    dec %r9b
+    jz .Lhmac_compression_start
+    jmp .Lhmac_start_outer_hash
 
 
 // Main HMAC function
@@ -599,7 +660,7 @@ hmac256:
     push %r15
     push %r14
     push %r13
-    lea .Lhmac_compression_start(%rip), %r13
+    mov $3, %r13b
 .Lhmac_start:
     vzeroall
 
@@ -616,7 +677,7 @@ hmac256:
 	xor %r8, %r8
 	jmp load_key
 .Lhmac_compress_key:
-	lea .Lhmac_inner_key_compressed(%rip), %rax
+	mov $1, %al
 	jmp sha256_compress_block
 
 .Lhmac_inner_key_compressed:
@@ -632,7 +693,7 @@ hmac256:
     vmovdqa (%rdi), block_lo
     vmovdqa 0x20(%rdi), block_hi
 
-    lea .Lhmac_compression_done(%rip), %rax
+    mov $2, %al
     jmp sha256_compress_block
 .Lhmac_compression_done:
 
@@ -644,7 +705,7 @@ hmac256:
     // Backup hash state every 256 blocks
     test %sil, %sil
     jnz .Lhmac_compression_next_round
-    lea .Lhmac_compression_next_round(%rip), %r9
+    mov $1, %r9b
     jmp backup_internal_state
 
 .Lhmac_compression_next_round:
@@ -669,11 +730,11 @@ hmac256:
 
 .Lhmac_inner_hash_done:
     // Backup inner hash's final state
-    lea .Lhmac_start_outer_hash(%rip), %r9
+    mov $2, %r9b
     jmp backup_internal_state
 
 .Lhmac_start_outer_hash:
-    lea .Lhmac_start_outer_hash(%rip), %r13
+    mov $4, %r13b
 
     // Backup inner hash
 	movdqa state_lo, inner_hash_backup_lo
@@ -693,7 +754,7 @@ hmac256:
 	jmp load_key
 .Lhmac_compress_outer_key:
 
-	lea .Lhmac_compress_outer_key_done(%rip), %rax
+	mov $3, %al
 	jmp sha256_compress_block
 
 .Lhmac_compress_outer_key_done:
@@ -701,7 +762,7 @@ hmac256:
 	// Padding
 	load_256bit_constant   0x0000000000000080, 0x0, 0x0, 0x0003000000000000 block_hi
 
-    lea .Lhmac_leave(%rip), %rax
+    mov $4, %al
 	jmp sha256_compress_block
 
 .Lhmac_leave:
@@ -718,6 +779,8 @@ hmac256:
     pshufd $0x4e, state_hi, state_hi
 
     // Save HMAC
+    mov %rdx, (%rdx)
+    sfence
     movdqa state_hi, (%rdx)
     movdqa state_lo, 0x10(%rdx)
 
