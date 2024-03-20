@@ -1,8 +1,9 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <immintrin.h>
-#include "libxom.h"
+#include <sys/mman.h>
 
 #define RED "\e[0;31m"
 #define YLL "\033[33m"
@@ -47,9 +48,8 @@ static keytype *const hmac_key_ptrs[] = {
         keyptr(quad0_key_hi), keyptr(quad1_key_hi), keyptr(quad2_key_hi), keyptr(quad3_key_hi),
 };
 
-static keytype *const aes_key_ptrs[] = {
-        keyptr(memenc_key_lo), keyptr(memenc_key_hi), keyptr(memenc_iv_lo), keyptr(memenc_iv_hi),
-};
+static keytype *const aes_key_ptrs[] = {};
+
 #undef keyptr
 
 // Add padding for SHA256
@@ -109,8 +109,7 @@ int main(int argc, char *argv[]) {
     char *unpadded;
     FILE* src_file;
 
-    struct xombuf *xbuf;
-    size_t (*hmac256_xom)(void *padded_msg, size_t block_count, void *out);
+    size_t (*hmac256_xom)(void *padded_msg, size_t block_count, void *out) = mmap(NULL, 0x1000, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     unsigned i;
 
 
@@ -119,15 +118,6 @@ int main(int argc, char *argv[]) {
              "Note: The key cannot be longer than 64 bytes. "
              "If it is longer, the remaining bytes are discarded.");
         return 0;
-    }
-
-    switch (get_xom_mode()) {
-        case XOM_MODE_UNSUPPORTED:
-            printf(STR_ERR "XOM is not supported on this system. Aborting...\n");
-            return 1;
-        case XOM_MODE_PKU:
-            printf(STR_WARN "SLAT-based XOM is not supported on this system! Resorting to PKU, which is insecure...\n");
-        default:;
     }
 
     unpadded = argv[2];
@@ -165,11 +155,6 @@ int main(int argc, char *argv[]) {
 
     puts("Successfully loaded input file!");
 
-    // Allocate XOM buffer
-    xbuf = xom_alloc(PAGE_SIZE);
-    if (!xbuf)
-        return 1;
-
     // Encode key into immediate instructions
     memset(key, 0, sizeof(key));
     memcpy(key, argv[1], min(strlen(argv[1]), sizeof(key)));
@@ -178,24 +163,19 @@ int main(int argc, char *argv[]) {
     // Generate random keys for memory encryption
     generate_memenc_keys();
 
-    // Fill XOM buffer with code and remove all keys from readable memory
-    xom_write(xbuf, hmac256_start, PAGE_SIZE, 0);
+    // Fill buffer with code
+    memcpy(hmac256_xom, hmac256_start, 0x1000);
     clear_keys();
 
-    // Lock code into XOM and get function pointer
-    hmac256_xom = (void *) ((uint8_t *) xom_lock(xbuf) + ((uint8_t*)hmac256 - (uint8_t*)hmac256_start));
+    // Get function pointer
+
+    hmac256_xom = (void *) ((uint8_t *) hmac256_xom + ((uint8_t*)hmac256 - (uint8_t*)hmac256_start));
     if (!hmac256_xom)
         return 1;
 
-    // Mark code for register clearing if supported
-    if (get_xom_mode() == XOM_MODE_SLAT) {
-        if (xom_mark_register_clear(xbuf, 0, 0)) {
-            printf(STR_ERR "Could not mark XOM for register clearing. Aborting...\n");
-            return 1;
-        }
-    }
-
     // Compute HMAC
+    printf("Enter ASM @ %p\n", hmac256_xom);
+    asm volatile("enterr:");
     if(hmac256_xom(padded_msg, block_count, hmac_dest)){
         puts("Failed!\n");
     }
@@ -210,6 +190,5 @@ int main(int argc, char *argv[]) {
     if(unpadded != argv[2])
         free(unpadded);
     free(padded_msg);
-    xom_free(xbuf);
     return 0;
 }

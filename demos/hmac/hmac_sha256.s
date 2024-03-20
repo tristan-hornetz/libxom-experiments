@@ -250,7 +250,7 @@ hmac256_start:
     // Encrypt the counter block
 
     pxor %xmm4, %xmm4
-    movq %rdi, %xmm4
+    //movq %rdx, %xmm4
     paddq %xmm3, %xmm4
     vpermq $0x14, %ymm4, %ymm4
     vpxor   %ymm5, %ymm4, %ymm4
@@ -269,13 +269,23 @@ hmac256_start:
 
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
-    mov %rdi, (%rdi)
+
+    // Check if we were interrupted in the meantime
+    // If so, this is out last chance to restore the state
+    test %r15, %r15
+    jz .Lsave_ymm0_memaccess_store_critical
+    mov $2, %r9
+    jmp restore_internal_state
+
+.Lsave_ymm0_memaccess_store_critical:
+    mov %rdx, (%rdx)
     sfence
-    vmovdqa %ymm4, (%rdi)
+    vmovdqa %ymm4, (%rdx)
     jmp .Lymm0_crypt_return
 .Lload_ymm0_memaccess:
-    vmovdqa (%rdi), %ymm0
+    vmovdqa (%rdx), %ymm0
     vpxor %ymm4, %ymm0, %ymm0
+
 .Lymm0_crypt_return:
     mfence
     dec %al
@@ -576,31 +586,24 @@ backup_internal_state:
     jmp .Lprime_memory_encryption
 .Lbackup_internal_state_primed:
 
-    // Check if we were interrupted in the meantime
-    // If so, this is out last chance to restore the state
-    test %r15, %r15
-    jz .Lbackup_internal_state_begin_store
-    mov %r13, %r9
-    jmp restore_internal_state
-
     // Save %ymm0 and address of current message block to memory
 .Lbackup_internal_state_begin_store:
     // Saving the block counter to memory is okay, because it is not secret and
     // any modifications to it can at worst modify the length of the authenticated message,
     // something which the user can do anyway
-    mov %rdi, (%rsp)
-    xchg %rdi, %rdx
+    mov %rdi, 8(%rsp)
+    mov %rsi, (%rsp)
     mov $1, %al
     jmp .Lsave_ymm0_unpack
 .Lbackup_internal_state_store_done:
-    xchg %rdi, %rdx
 
-    // If we were not interrupted, all is good and we can continue
+    // If we were not interrupted during the store operation, all is good and we can continue
     test %r15, %r15
     jz .Lrestore_sha_registers
 
     // If we were interrupted, we cannot recover, so return -1
     vzeroall
+    add $0x10, %rsp
     xor %rax, %rax
     not %rax
     pop %r13
@@ -612,7 +615,8 @@ backup_internal_state:
 
 restore_internal_state:
     // Restore address of message
-    mov (%rsp), %rdi
+    mov 8(%rsp), %rdi
+    mov (%rsp), %rsi
 
     // Reset %r15
     xor %r15, %r15
@@ -624,12 +628,10 @@ restore_internal_state:
 .Lrestore_internal_state_primed:
 
     // Load ymm0 from memory
-    xchg %rdi, %rdx
     mov $2, %al
     jmp .Lload_ymm0_unpack
 
 .Lrestore_internal_state_loaded:
-    xchg %rdi, %rdx
 
     // If we were interrupted, we have to load the value again
     test %r15, %r15
@@ -639,14 +641,11 @@ restore_internal_state:
     vextracti128 $1, %ymm0, state_hi
     movdqa %xmm0, state_lo
     load_128bit_constant 0x0405060700010203, 0x0c0d0e0f08090a0b, ishuf_mask
-    
+
     dec %r9b
     jz .Lhmac_compression_next_round
-    dec %r9b
-    jz .Lhmac_start_outer_hash
-    dec %r9b
-    jz .Lhmac_compression_start
-    jmp .Lhmac_start_outer_hash
+    jmp .Lhmac_compression_start
+
 
 
 // Main HMAC function
@@ -660,7 +659,9 @@ hmac256:
     push %r15
     push %r14
     push %r13
-    mov $3, %r13b
+    push %rdi
+    push %rsi
+    mov $1, %r13
 .Lhmac_start:
     vzeroall
 
@@ -684,12 +685,24 @@ hmac256:
     test %r15, %r15
     jnz .Lhmac_start
 
+    //movdqa state_lo, (%rdx)
+    //movdqa state_hi, 0x10(%rdx)
+    //jmp .Lexit
+
     // Backup state after compressing inner key
-    mov %r13, %r9
+    mov $2, %r9b
     jmp backup_internal_state
 
     // Compress message
 .Lhmac_compression_start:
+    //test %r13, %r13
+    //jnz .Ltest
+    //movdqa state_lo, (%rdx)
+    //movdqa state_hi, 0x10(%rdx)
+    //jmp .Lexit
+    //.Ltest:
+    //test %rsi, %rsi
+    //jz .Lhmac_compression_next_round
     vmovdqa (%rdi), block_lo
     vmovdqa 0x20(%rdi), block_hi
 
@@ -698,19 +711,22 @@ hmac256:
 .Lhmac_compression_done:
 
     // If we were interrupted, restore state
-    mov %r13, %r9
+    mov $2, %r9b
     test %r15, %r15
     jnz restore_internal_state
 
+    add $0x40, %rdi
+    dec %rsi
+
     // Backup hash state every 256 blocks
-    test %sil, %sil
-    jnz .Lhmac_compression_next_round
+    cmp $2, %sil
+    jne .Lhmac_compression_next_round
+
     mov $1, %r9b
     jmp backup_internal_state
 
 .Lhmac_compression_next_round:
-    add $0x40, %rdi
-    dec %rsi
+    test %rsi, %rsi
     jnz .Lhmac_compression_start
 
     // Bring hash bytes into correct order
@@ -725,16 +741,15 @@ hmac256:
 
     test %r15, %r15
     jz .Lhmac_inner_hash_done
-    mov %r13, %r9
+    mov $2, %r9b
     jmp restore_internal_state
 
 .Lhmac_inner_hash_done:
     // Backup inner hash's final state
-    mov $2, %r9b
-    jmp backup_internal_state
+    // mov $2, %r9b
+    // jmp backup_internal_state
 
 .Lhmac_start_outer_hash:
-    mov $4, %r13b
 
     // Backup inner hash
 	movdqa state_lo, inner_hash_backup_lo
@@ -785,11 +800,17 @@ hmac256:
     movdqa state_lo, 0x10(%rdx)
 
     // If we were interrupted while computing the outer hash, we have to start again
-    mov %r13, %r9
+    mov $3, %r9
     test %r15, %r15
     jnz restore_internal_state
 
+    // dec %r13
+    // jz restore_internal_state
+
+
+.Lexit:
     vzeroall
+    add $0x10, %rsp
     xor %rax, %rax
     pop %r13
     pop %r14
