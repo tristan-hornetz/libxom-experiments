@@ -270,16 +270,29 @@ hmac256_start:
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
 
+
+
+    //dec %r13
+    //jnz .Lsave_ymm0_memaccess_store_critical
+    //mov $2, %r9b
+    //movdqa %xmm0, state_lo
+    //vextracti128 $1, %ymm0, state_hi
+    //jmp restore_internal_state
+
     // Check if we were interrupted in the meantime
     // If so, this is out last chance to restore the state
     test %r15, %r15
     jz .Lsave_ymm0_memaccess_store_critical
     mov $2, %r9
+    movdqa %xmm0, state_lo
+    vextracti128 $1, %ymm0, state_hi
     jmp restore_internal_state
 
 .Lsave_ymm0_memaccess_store_critical:
     mov %rdx, (%rdx)
     sfence
+    mov %rdi, 8(%rsp)
+    mov %rsi, (%rsp)
     vmovdqa %ymm4, (%rdx)
     jmp .Lymm0_crypt_return
 .Lload_ymm0_memaccess:
@@ -591,8 +604,7 @@ backup_internal_state:
     // Saving the block counter to memory is okay, because it is not secret and
     // any modifications to it can at worst modify the length of the authenticated message,
     // something which the user can do anyway
-    mov %rdi, 8(%rsp)
-    mov %rsi, (%rsp)
+
     mov $1, %al
     jmp .Lsave_ymm0_unpack
 .Lbackup_internal_state_store_done:
