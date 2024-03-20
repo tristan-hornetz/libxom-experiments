@@ -644,8 +644,11 @@ restore_internal_state:
 
     dec %r9b
     jz .Lhmac_compression_next_round
-    jmp .Lhmac_compression_start
-
+    dec %r9b
+    jz .Lhmac_compression_start
+    dec %r9b
+    jz .Lhmac_start_outer_hash
+    jmp .Lhmac_start_outer_hash
 
 
 // Main HMAC function
@@ -739,16 +742,6 @@ hmac256:
     pshufb ishuf_mask, state_lo
     pshufb ishuf_mask, state_hi
 
-    test %r15, %r15
-    jz .Lhmac_inner_hash_done
-    mov $2, %r9b
-    jmp restore_internal_state
-
-.Lhmac_inner_hash_done:
-    // Backup inner hash's final state
-    // mov $2, %r9b
-    // jmp backup_internal_state
-
 .Lhmac_start_outer_hash:
 
     // Backup inner hash
@@ -793,25 +786,21 @@ hmac256:
     pshufd $0x4e, state_lo, state_lo
     pshufd $0x4e, state_hi, state_hi
 
+    // If we were interrupted while computing the outer hash, we have to start again
+    mov $2, %r9
+    test %r15, %r15
+    jnz restore_internal_state
+
     // Save HMAC
     mov %rdx, (%rdx)
     sfence
     movdqa state_hi, (%rdx)
     movdqa state_lo, 0x10(%rdx)
 
-    // If we were interrupted while computing the outer hash, we have to start again
-    mov $3, %r9
-    test %r15, %r15
-    jnz restore_internal_state
-
-    // dec %r13
-    // jz restore_internal_state
-
-
 .Lexit:
     vzeroall
     add $0x10, %rsp
-    xor %rax, %rax
+    mov %r15, %rax
     pop %r13
     pop %r14
     pop %r15
