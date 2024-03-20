@@ -177,7 +177,6 @@ hmac256_start:
     jmp .Laes_gctr_linear_prepare_roundkey_128
 .Laespkeyr10:
     movdqa %xmm8, %xmm15
-    xor %r15, %r15
 
     test %r8, %r8
     jz .Lbackup_internal_state_primed
@@ -667,8 +666,8 @@ hmac256:
     push %r13
     push %rdi
     push %rsi
-    xor %r15, %r15
 .Lhmac_start:
+    xor %r15, %r15
     mov $1, %r13
     vzeroall
 
