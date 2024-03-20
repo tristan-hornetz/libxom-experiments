@@ -668,7 +668,6 @@ hmac256:
     push %rsi
 .Lhmac_start:
     xor %r15, %r15
-    mov $1, %r13
     vzeroall
 
     // Load initial hash state and shuffle mask
@@ -697,14 +696,6 @@ hmac256:
 
     // Compress message
 .Lhmac_compression_start:
-    //test %r13, %r13
-    //jnz .Ltest
-    //movdqa state_lo, (%rdx)
-    //movdqa state_hi, 0x10(%rdx)
-    //jmp .Lexit
-    //.Ltest:
-    //test %rsi, %rsi
-    //jz .Lhmac_compression_next_round
     vmovdqa (%rdi), block_lo
     vmovdqa 0x20(%rdi), block_hi
 
