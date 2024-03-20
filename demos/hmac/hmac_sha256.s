@@ -58,24 +58,24 @@
 .macro load_256bit_constant, quad0, quad1, quad2, quad3, dest, name
     .globl quad0_\name
     quad0_\name:
-    mov $\quad0, %r15
-    movq %r15, %xmm2
+    mov $\quad0, %r14
+    movq %r14, %xmm2
     .globl quad1_\name
     quad1_\name:
-    mov $\quad1, %r15
-    movq %r15, %xmm3
+    mov $\quad1, %r14
+    movq %r14, %xmm3
     movlhps	%xmm3, %xmm2
     .globl quad2_\name
     quad2_\name:
-    mov $\quad2, %r15
-    movq %r15, %xmm4
+    mov $\quad2, %r14
+    movq %r14, %xmm4
     .globl quad3_\name
     quad3_\name:
-    mov $\quad3, %r15
-    movq %r15, %xmm5
+    mov $\quad3, %r14
+    movq %r14, %xmm5
     movlhps	%xmm5,%xmm4
     vinserti128    $1, %xmm4, %ymm2, \dest
-    xor %r15, %r15
+    xor %r14, %r14
 .endm
 
 .macro roundconst_get, c_lolo, c_lohi, c_hilo, c_hihi, end_sym
@@ -103,23 +103,23 @@ hmac256_start:
     // Load key from immediates
     .globl memenc_key_lo
     memenc_key_lo:
-    movq $0x123456789abcdef,%r15
-    movq   %r15,%xmm9
+    movq $0x123456789abcdef,%r14
+    movq   %r14,%xmm9
     .globl memenc_key_hi
     memenc_key_hi:
-    movq $0x123456789abcdef,%r15
-    movq   %r15,%xmm8
+    movq $0x123456789abcdef,%r14
+    movq   %r14,%xmm8
     movlhps	%xmm8,%xmm9
 
     // Load initial counter block from immediates
     .globl memenc_iv_lo
     memenc_iv_lo:
-    movq $0x123456789abcdef,%r15
-    movq   %r15,%xmm7
+    movq $0x123456789abcdef,%r14
+    movq   %r14,%xmm7
     .globl memenc_iv_hi
     memenc_iv_hi:
-    movq $0x123456789abcdef,%r15
-    movq   %r15,%xmm6
+    movq $0x123456789abcdef,%r14
+    movq   %r14,%xmm6
     movlhps	%xmm6,%xmm7
     vinserti128 $1, %xmm7, %ymm15, %ymm15
 
@@ -269,15 +269,6 @@ hmac256_start:
 
 .Lsave_ymm0_memaccess:
     vpxor %ymm4, %ymm0, %ymm4
-
-
-
-    //dec %r13
-    //jnz .Lsave_ymm0_memaccess_store_critical
-    //mov $2, %r9b
-    //movdqa %xmm0, state_lo
-    //vextracti128 $1, %ymm0, state_hi
-    //jmp restore_internal_state
 
     // Check if we were interrupted in the meantime
     // If so, this is out last chance to restore the state
@@ -676,8 +667,9 @@ hmac256:
     push %r13
     push %rdi
     push %rsi
-    mov $1, %r13
+    xor %r15, %r15
 .Lhmac_start:
+    mov $1, %r13
     vzeroall
 
     // Load initial hash state and shuffle mask
@@ -699,10 +691,6 @@ hmac256:
 .Lhmac_inner_key_compressed:
     test %r15, %r15
     jnz .Lhmac_start
-
-    //movdqa state_lo, (%rdx)
-    //movdqa state_hi, 0x10(%rdx)
-    //jmp .Lexit
 
     // Backup state after compressing inner key
     mov $2, %r9b
