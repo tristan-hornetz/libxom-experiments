@@ -16,11 +16,11 @@ aes_gctr_linear:
     // Load key from immediates
 .global aes_key_lo
 aes_key_lo:
-    movq $0x123456789abcdef,%r15
+    movq $0x1234567890abcdef,%r15
     movq   %r15,%xmm0
 .global aes_key_hi
 aes_key_hi:
-    movq $0x123456789abcdef,%r15
+    movq $0x1234567890abcdef,%r15
     movq   %r15,%xmm1
     movlhps	%xmm1,%xmm0
     xor %r15b, %r15b
