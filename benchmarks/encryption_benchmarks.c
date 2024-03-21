@@ -34,7 +34,7 @@
 #define TSC_CRYSTAL_FREQUENCY 0x249f000
 
 extern void __attribute__((section(".data"))) hmac256_start();
-extern void __attribute__((section(".data"))) hmac256(
+extern size_t __attribute__((section(".data"))) hmac256(
         void *__attribute__((aligned(0x20))) padded_msg,
         size_t block_count,
         void *__attribute__((aligned(0x20))) out);
@@ -125,7 +125,7 @@ exit:
 
 void hmac_xom() {
     struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
-    void (*hmac256_xom) (
+    size_t (*hmac256_xom) (
         void *__attribute__((aligned(0x20))) padded_msg,
         size_t block_count,
         void *__attribute__((aligned(0x20))) out);
@@ -142,7 +142,7 @@ void hmac_xom() {
         goto exit;
 
     // Add function offset within page
-    hmac256_xom += hmac256 - hmac256_start;
+    hmac256_xom += (uint8_t*)hmac256 - (uint8_t*)hmac256_start;
 
     if (get_xom_mode() == XOM_MODE_SLAT) {
         if (xom_mark_register_clear(xbuf, 0, 0)) {
@@ -152,7 +152,7 @@ void hmac_xom() {
     }
 
     timer = rdtsc();
-    hmac256_xom(random_data, (DATA_SIZE / HMAC_SHA256_BLOCK_SIZE) - 1, encryption_dest);
+    while(hmac256_xom(random_data, (DATA_SIZE / HMAC_SHA256_BLOCK_SIZE) - 1, encryption_dest));
     timer = rdtsc() - timer;
 
 exit:
@@ -206,8 +206,9 @@ exit:
 void aes_xom(void) {
     struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
     const size_t aes_fun_size = (uint8_t*)aes_gctr_linear_end - (uint8_t*)aes_gctr_linear;
-    size_t (*aes_xom)(void *icb, void* x, void *y, unsigned int num_blocks) = NULL;
+    size_t (*aes_xom_ptr)(void *icb, void* x, void *y, unsigned int num_blocks) = NULL;
     uint8_t __attribute__((aligned(0x10))) icb[16];
+    size_t remaining = DATA_SIZE / (128 >> 3), rdiff;
 
     if(!xbuf)
         return;
@@ -220,11 +221,18 @@ void aes_xom(void) {
     if (xom_write(xbuf, aes_gctr_linear, aes_fun_size, 0) != aes_fun_size)
         goto exit;
 
-    aes_xom = xom_lock(xbuf);
+    aes_xom_ptr = xom_lock(xbuf);
 
+#define write_offset(x) (DATA_SIZE - (x)*(128 >> 3))
     timer = rdtsc();
-    aes_xom(icb, random_data, encryption_dest, DATA_SIZE / (128 >> 3));
+    while (remaining) {
+        remaining = aes_xom_ptr(icb, random_data + write_offset(remaining), encryption_dest + write_offset(remaining), (DATA_SIZE -
+                write_offset(remaining)) / (128 >> 3));
+        rdiff = remaining - rdiff;
+    }
     timer = rdtsc() - timer;
+#undef write_offset
+
 
 exit:
     xom_free(xbuf);
