@@ -249,7 +249,7 @@ hmac256_start:
     // Encrypt the counter block
 
     pxor %xmm4, %xmm4
-    //movq %rdx, %xmm4
+    movq %rdx, %xmm4
     paddq %xmm3, %xmm4
     vpermq $0x14, %ymm4, %ymm4
     vpxor   %ymm5, %ymm4, %ymm4
