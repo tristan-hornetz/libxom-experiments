@@ -207,7 +207,7 @@ void aes_xom(void) {
     struct xombuf* xbuf = xom_alloc(PAGE_SIZE);
     const size_t aes_fun_size = (uint8_t*)aes_gctr_linear_end - (uint8_t*)aes_gctr_linear;
     size_t (*aes_xom_ptr)(void *icb, void* x, void *y, unsigned int num_blocks) = NULL;
-    uint8_t __attribute__((aligned(0x10))) icb[16];
+    uint8_t __attribute__((aligned(0x20))) icb[16];
     size_t remaining = DATA_SIZE / (128 >> 3), rdiff;
 
     if(!xbuf)

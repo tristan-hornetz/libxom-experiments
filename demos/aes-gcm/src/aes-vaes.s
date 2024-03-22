@@ -1,6 +1,8 @@
-.file "src/aes.s"
+.file "src/aes-vaes.s"
 .data
-    
+
+// This version of the AES implementation uses the VAES extensions for better performance
+
 .align 0x100
 
 // void aes_gctr_linear(void *icb, void* x, void *y, unsigned int num_blocks)
@@ -81,10 +83,15 @@ aes_key_hi:
     movdqa %xmm1, %xmm14
 
     // Load initial counter block
-    movaps (%rdi), %xmm3
+    movdqa (%rdi), %xmm3
+    movdqa %xmm3, %xmm15
     movq $1, %r8
     movq %r8, %xmm2
-    jmp .Laes_gctr_linear_enc_block
+    paddq %xmm2, %xmm15
+    vinserti128 $1, %xmm15, %ymm3, %ymm3
+    vpermq $0x44, %ymm2, %ymm2
+
+    jmp .Laes_gctr_expand_round_keys
 
 .Laes_gctr_linear_prepare_roundkey_128:
     pshufd $255, %xmm2, %xmm2
@@ -118,34 +125,51 @@ aes_key_hi:
     jz .Laeskeygenret9
     jmp .Laeskeygenret10
 
+.Laes_gctr_expand_round_keys:
+
+    vpermq $0x44, %ymm4, %ymm4
+    vpermq $0x44, %ymm5, %ymm5
+    vpermq $0x44, %ymm6, %ymm6
+    vpermq $0x44, %ymm7, %ymm7
+    vpermq $0x44, %ymm8, %ymm8
+    vpermq $0x44, %ymm9, %ymm9
+    vpermq $0x44, %ymm10, %ymm10
+    vpermq $0x44, %ymm11, %ymm11
+    vpermq $0x44, %ymm12, %ymm12
+    vpermq $0x44, %ymm13, %ymm13
+    vpermq $0x44, %ymm14, %ymm14
+
+    // ceil(%rcx / 2)
+    inc %rcx
+    shr $1, %rcx
 
 .Laes_gctr_linear_enc_block:
 
     // Load counter block into xmm0
-    movaps %xmm3, %xmm0
+    vmovaps %ymm3, %ymm0
 
     // Encrypt the block
-    pxor       %xmm4,  %xmm0
-    aesenc     %xmm5,  %xmm0
-    aesenc     %xmm6,  %xmm0
-    aesenc     %xmm7,  %xmm0
-    aesenc     %xmm8,  %xmm0
-    aesenc     %xmm9,  %xmm0
-    aesenc     %xmm10, %xmm0
-    aesenc     %xmm11, %xmm0
-    aesenc     %xmm12, %xmm0
-    aesenc     %xmm13, %xmm0
-    aesenclast %xmm14, %xmm0
+    vpxor      %ymm4, %ymm0, %ymm0
+    vaesenc     %ymm5, %ymm0, %ymm0
+    vaesenc     %ymm6, %ymm0, %ymm0
+    vaesenc     %ymm7, %ymm0, %ymm0
+    vaesenc     %ymm8, %ymm0, %ymm0
+    vaesenc     %ymm9, %ymm0, %ymm0
+    vaesenc     %ymm10, %ymm0, %ymm0
+    vaesenc     %ymm11, %ymm0, %ymm0
+    vaesenc     %ymm12, %ymm0, %ymm0
+    vaesenc     %ymm13, %ymm0, %ymm0
+    vaesenclast %ymm14, %ymm0, %ymm0
 
     // Load plain text block
-    movaps (%rsi), %xmm1
+    vmovdqa (%rsi), %ymm1
     // XOR with encrypted counter
-    pxor %xmm1, %xmm0
+    vpxor %xmm1, %xmm0, %xmm0
 
     // Store to output buffer
     mov %rdx, (%rdx)
     sfence
-    movaps %xmm0, (%rdx)
+    vmovdqa %ymm0, (%rdx)
 
     // Were our registers cleared?
     // If so, abort and tell caller where to restart
@@ -157,33 +181,18 @@ aes_key_hi:
     jz .Laes_gctr_linear_enc_done
 
     // Increment counter block
-    paddd %xmm2, %xmm3
+    vpaddd %xmm2, %xmm3, %xmm3
 
     // Increment input and output pointers
-    add $0x10, %rdx
-    add $0x10, %rsi
+    add $0x20, %rdx
+    add $0x20, %rsi
 
     jmp .Laes_gctr_linear_enc_block
 
 .Laes_gctr_linear_enc_done:
-    // Clear SSE registers before returning
-    pxor   %xmm0, %xmm0
-    movaps %xmm0, %xmm1
-    // xmm2 contains 0x1
-    movaps %xmm0, %xmm3
-    movaps %xmm0, %xmm4
-    movaps %xmm0, %xmm5
-    movaps %xmm0, %xmm6
-    movaps %xmm0, %xmm7
-    movaps %xmm0, %xmm8
-    movaps %xmm0, %xmm9
-    movaps %xmm0, %xmm10
-    movaps %xmm0, %xmm11
-    movaps %xmm0, %xmm12
-    movaps %xmm0, %xmm13
-    movaps %xmm0, %xmm14
-    // xmm15 is not used
-    
+    // Clear AVX registers before returning
+    vzeroall
+
     // Return the amount of remaining blocks
     mov %rcx, %rax
 
