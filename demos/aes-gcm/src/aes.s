@@ -143,8 +143,6 @@ aes_key_hi:
     pxor %xmm1, %xmm0
 
     // Store to output buffer
-    mov %rdx, (%rdx)
-    sfence
     movaps %xmm0, (%rdx)
 
     // Were our registers cleared?

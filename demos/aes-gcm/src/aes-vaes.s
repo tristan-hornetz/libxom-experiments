@@ -167,8 +167,6 @@ aes_key_hi:
     vpxor %xmm1, %xmm0, %xmm0
 
     // Store to output buffer
-    mov %rdx, (%rdx)
-    sfence
     vmovdqa %ymm0, (%rdx)
 
     // Were our registers cleared?

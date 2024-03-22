@@ -243,9 +243,9 @@ const static struct {
     const char* name;
     const char* cname;
 } benchmarks[] = {
-        {.fn = hmac_gcrypt, .name = "HMAC-SHA256 (libgcrypt)", .cname = "hmac_lgcrypt"},
-        {.fn = hmac_xom, .name = "HMAC-SHA256 (XOM)", .cname = "hmac_xom"},
-        {.fn = aes_gcrypt, .name = "AES-128-CTR (libgcrypt)", .cname = "aes_gcrypt"},
+        //{.fn = hmac_gcrypt, .name = "HMAC-SHA256 (libgcrypt)", .cname = "hmac_lgcrypt"},
+        //{.fn = hmac_xom, .name = "HMAC-SHA256 (XOM)", .cname = "hmac_xom"},
+        //{.fn = aes_gcrypt, .name = "AES-128-CTR (libgcrypt)", .cname = "aes_gcrypt"},
         {.fn = aes_xom, .name = "AES-128-CTR (XOM)", .cname = "aes_xom"},
 };
 
