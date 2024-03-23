@@ -1,7 +1,9 @@
 .file "src/aes.s"
 .data
-    
 .align 0x100
+
+// SSE3 version of the AES implementation, which is used for the demo.
+// For the AVX/VAES version, which is used in the benchmarks, see "aes-vaes.c"
 
 // void aes_gctr_linear(void *icb, void* x, void *y, unsigned int num_blocks)
 // icb: %rdi
@@ -147,8 +149,8 @@ aes_key_hi:
 
     // Were our registers cleared?
     // If so, abort and tell caller where to restart
-    cmp $0xba, %r15b
-    je .Laes_gctr_linear_enc_done
+    test %r15b, %r15b
+    jnz .Laes_gctr_linear_enc_done
 
     // Decrement counter
     dec %rcx

@@ -15,6 +15,8 @@ aes_gctr_linear:
     // Backup callee-saved register
     push %r15
 
+    mov $0xff, %r9
+
     // Load key from immediates
 .global aes_key_lo
 aes_key_lo:
@@ -171,8 +173,11 @@ aes_key_hi:
 
     // Were our registers cleared?
     // If so, abort and tell caller where to restart
-    cmp $0xba, %r15b
-    je .Laes_gctr_linear_enc_done
+    test %r15b, %r15b
+    jnz .Laes_gctr_linear_enc_done
+
+    dec %r9
+    jz .Laes_gctr_linear_enc_done
 
     // Decrement counter
     dec %rcx
@@ -192,6 +197,7 @@ aes_key_hi:
     vzeroall
 
     // Return the amount of remaining blocks
+    shl $1, %rcx
     mov %rcx, %rax
 
     // Restore callee-saved register

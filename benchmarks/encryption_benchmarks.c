@@ -223,6 +223,13 @@ void aes_xom(void) {
 
     aes_xom_ptr = xom_lock(xbuf);
 
+    if (get_xom_mode() == XOM_MODE_SLAT) {
+        if (xom_mark_register_clear(xbuf, 0, 0)) {
+            printf(STR_FAIL "Could not mark XOM for register clearing. Aborting...\n");
+            goto exit;
+        }
+    }
+
 #define write_offset(x) (DATA_SIZE - (x)*(128 >> 3))
     timer = rdtsc();
     while (remaining) {

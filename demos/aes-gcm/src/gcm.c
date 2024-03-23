@@ -1,6 +1,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
+#include <sched.h>
 #include "libxom-aes-gcm.h"
 #include "aes.h"
 
@@ -14,16 +15,7 @@ const static uint64_t __attribute__((aligned(16))) zeroes_16[2] = {0, 0};
 extern void gfmul(__m128i a, __m128i b, __m128i* res);
 
 static inline void add32_be(__m128i* q, uint32_t n){
-    unsigned i;
-    uint32_t m;
-
-    for(i = 0; i < sizeof(*q); i++)
-        ((uint8_t*)&m)[i] = *(((uint8_t*)q) + sizeof(*q) - i - 1);
-
-    m += n;
-
-    for(i = 0; i < sizeof(*q); i++)
-        *(((uint8_t*)q) + sizeof(*q) - i - 1) = ((uint8_t*)&m)[i];
+    *(uint32_t*)q += n;
 }
 
 static __m128i ghash(const __m128i H, void *restrict in, const size_t num_blocks){
@@ -40,7 +32,8 @@ static __m128i ghash(const __m128i H, void *restrict in, const size_t num_blocks
     return Y;
 }
 
-static inline uintptr_t gctr(gctr_fun gctr_instance, __m128i *restrict X, __m128i *restrict Y, const __m128i IPB, const size_t num_blocks){
+static inline uintptr_t gctr(gctr_fun gctr_instance, __m128i *restrict X, __m128i *restrict Y, const __m128i IPB, const size_t num_blocks) {
+    sched_yield();
     return gctr_instance((void*)&IPB, X, Y, num_blocks);
 }
 
