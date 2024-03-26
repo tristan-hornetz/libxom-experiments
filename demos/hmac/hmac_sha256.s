@@ -111,18 +111,6 @@ hmac256_start:
     movq   %r14,%xmm8
     movlhps	%xmm8,%xmm9
 
-    // Load initial counter block from immediates
-    .globl memenc_iv_lo
-    memenc_iv_lo:
-    movq $0x123456789abcdef,%r14
-    movq   %r14,%xmm7
-    .globl memenc_iv_hi
-    memenc_iv_hi:
-    movq $0x123456789abcdef,%r14
-    movq   %r14,%xmm6
-    movlhps	%xmm6,%xmm7
-    vinserti128 $1, %xmm7, %ymm15, %ymm15
-
     // Prepare for round key generation
     movaps %xmm9, %xmm8
     vinserti128 $1, %xmm9, %ymm10, %ymm10
@@ -225,7 +213,8 @@ hmac256_start:
     mov $1, %r8
 
 .Lunpack_round_keys:
-    vpermq $0xee, %ymm15, %ymm3
+    vpxor %ymm3, %ymm3, %ymm3
+    vmovdqa %ymm3, %ymm4
     vpermq $0xee, %ymm10, %ymm5
     vpermq $0xee, %ymm11, %ymm6
     vpermq $0xee, %ymm12, %ymm7
@@ -241,17 +230,28 @@ hmac256_start:
     jnz .Lload_ymm0
 
 .Lsave_ymm0:
+    // Generate new IV
     xor %r8, %r8
+    rdrand %r14
+    movq %r14, %xmm3
+    rdrand %r14
+    movq %r14, %xmm4
+    movlhps %xmm3, %xmm4
+    movdqa %xmm4, (%r13)
+    pxor %xmm3, %xmm3
     jmp .Lencrypt_counter_block
+
 .Lload_ymm0:
+    // Load old IV
     mov $1, %r8
+    movdqa (%r13), %xmm4
 .Lencrypt_counter_block:
     // Encrypt the counter block
 
-    pxor %xmm4, %xmm4
-    movq %rdx, %xmm4
+    movq %rdx, %xmm3
     paddq %xmm3, %xmm4
     vpermq $0x14, %ymm4, %ymm4
+
     vpxor   %ymm5, %ymm4, %ymm4
     vaesenc %ymm6, %ymm4, %ymm4
     vaesenc %ymm7, %ymm4, %ymm4
@@ -661,11 +661,15 @@ restore_internal_state:
 hmac256:
     push %rbp
     mov %rsp, %rbp
+    sub $0x20, %rsp
+    shr $5, %rsp
+    shl $5, %rsp
     push %r15
     push %r14
     push %r13
     push %rdi
     push %rsi
+    lea 0x28(%rsp), %r13
 .Lhmac_start:
     xor %r15, %r15
     vzeroall

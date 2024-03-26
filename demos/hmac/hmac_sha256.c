@@ -23,10 +23,6 @@ extern void __attribute__((section(".data"))) hmac256_start();
 extern uint8_t memenc_key_lo;
 extern uint8_t memenc_key_hi;
 
-// Memory encryption IV
-extern uint8_t memenc_iv_lo;
-extern uint8_t memenc_iv_hi;
-
 // HMAC key
 extern uint8_t quad0_key_lo;
 extern uint8_t quad1_key_lo;
@@ -48,7 +44,7 @@ static keytype *const hmac_key_ptrs[] = {
 };
 
 static keytype *const aes_key_ptrs[] = {
-        keyptr(memenc_key_lo), keyptr(memenc_key_hi), keyptr(memenc_iv_lo), keyptr(memenc_iv_hi),
+        keyptr(memenc_key_lo), keyptr(memenc_key_hi)
 };
 #undef keyptr
 
