@@ -235,8 +235,9 @@ hmac256_start:
     rdrand %r14
     jae .Lsave_ymm0
     movq %r14, %xmm3
+.Lsave_ymm0_rdrand2:
     rdrand %r14
-    jae .Lsave_ymm0
+    jae .Lsave_ymm0_rdrand2
     movq %r14, %xmm4
     movlhps %xmm3, %xmm4
     movdqa %xmm4, (%r13)
