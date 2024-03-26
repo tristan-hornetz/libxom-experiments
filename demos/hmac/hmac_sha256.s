@@ -233,8 +233,10 @@ hmac256_start:
     // Generate new IV
     xor %r8, %r8
     rdrand %r14
+    jae .Lsave_ymm0
     movq %r14, %xmm3
     rdrand %r14
+    jae .Lsave_ymm0
     movq %r14, %xmm4
     movlhps %xmm3, %xmm4
     movdqa %xmm4, (%r13)
