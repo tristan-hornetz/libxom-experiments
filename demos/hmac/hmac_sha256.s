@@ -232,24 +232,17 @@ hmac256_start:
 .Lsave_ymm0:
     // Generate new IV
     xor %r8, %r8
-    rdrand %r14
-    jae .Lsave_ymm0
-    movq %r14, %xmm3
-.Lsave_ymm0_rdrand2:
-    rdrand %r14
-    jae .Lsave_ymm0_rdrand2
-    movq %r14, %xmm4
-    movlhps %xmm3, %xmm4
-    movdqa %xmm4, (%r13)
-    pxor %xmm3, %xmm3
     jmp .Lencrypt_counter_block
 
 .Lload_ymm0:
     // Load old IV
     mov $1, %r8
-    movdqa (%r13), %xmm4
+    movq (%r13), %r12
 .Lencrypt_counter_block:
     // Encrypt the counter block
+
+    movq %r12, %xmm3
+    movlhps %xmm3, %xmm4
 
     movq %rdx, %xmm3
     paddq %xmm3, %xmm4
@@ -282,10 +275,9 @@ hmac256_start:
     jmp restore_internal_state
 
 .Lsave_ymm0_memaccess_store_critical:
-    mov %rdx, (%rdx)
-    sfence
     mov %rdi, 8(%rsp)
     mov %rsi, (%rsp)
+    mov %r12, (%r13)
     vmovdqa %ymm4, (%rdx)
     jmp .Lymm0_crypt_return
 .Lload_ymm0_memaccess:
@@ -619,6 +611,14 @@ backup_internal_state:
 
 
 restore_internal_state:
+    // Generate IV
+    // We have to do this here, as the rdrand instruction often causes VM exits
+    xor %r15, %r15
+    rdrand %r12
+    jae restore_internal_state
+    test %r15, %r15
+    jnz restore_internal_state
+
     // Restore address of message
     mov 8(%rsp), %rdi
     mov (%rsp), %rsi
@@ -675,6 +675,10 @@ hmac256:
     lea 0x28(%rsp), %r13
 .Lhmac_start:
     xor %r15, %r15
+    rdrand %r12
+    jae .Lhmac_start
+    test %r15, %r15
+    jnz .Lhmac_start
     vzeroall
 
     // Load initial hash state and shuffle mask

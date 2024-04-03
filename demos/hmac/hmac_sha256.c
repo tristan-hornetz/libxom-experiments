@@ -177,8 +177,6 @@ int main(int argc, char *argv[]) {
     if (!padded_msg)
         return 1;
 
-    puts("Successfully loaded input file!");
-
     // Allocate XOM buffer
     xbuf = xom_alloc(PAGE_SIZE);
     if (!xbuf)
@@ -211,14 +209,16 @@ int main(int argc, char *argv[]) {
 
     // Compute HMAC
     if(call_hmac256(padded_msg, block_count, hmac_dest, hmac256_xom)){
-        puts("Failed!\n");
+        puts("Failed! This likely means that the program was interrupted during the backup procedure's critical section,"
+             "which should be fairly rare. Please try again.\n");
     }
-
-    // Print HMAC
-    for (i = 0; i < sizeof(hmac_dest); i++) {
-        printf("%02x", hmac_dest[i]);
+    else {
+        // Print HMAC
+        for (i = 0; i < sizeof(hmac_dest); i++) {
+            printf("%02x", hmac_dest[i]);
+        }
+        puts("");
     }
-    puts("");
 
     // Cleanup
     if(unpadded != argv[2])
