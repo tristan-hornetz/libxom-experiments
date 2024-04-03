@@ -33,8 +33,14 @@ static __m128i ghash(const __m128i H, void *restrict in, const size_t num_blocks
 }
 
 static inline uintptr_t gctr(gctr_fun gctr_instance, __m128i *restrict X, __m128i *restrict Y, const __m128i IPB, const size_t num_blocks) {
+    uintptr_t ret;
     sched_yield();
-    return gctr_instance((void*)&IPB, X, Y, num_blocks);
+    // Backup r14, r15 and vector registers before calling, as any of them could be overwritten without
+    // warning while executing the function
+    asm volatile ("call *%1" : "=a"(ret) : "r"(gctr_instance), "D"(&IPB), "S"(X), "d"(Y), "c"(num_blocks) : "r14", "r15",
+            "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7", "xmm8", "xmm9", "xmm10", "xmm11", "xmm12",
+            "xmm13", "xmm14", "xmm15");
+    return ret;
 }
 
 static __m128i getJ0(aes_gcm_context *restrict c, const __m128i H){
@@ -61,13 +67,13 @@ static __m128i getJ0(aes_gcm_context *restrict c, const __m128i H){
 }
 
 int aes_gcm_encrypt(aes_gcm_context *restrict c){
-    __m128i H, J0, J1, S;
+    __m128i H, J0, J1, S, zero128 = _mm_set_epi32(0, 0, 0, 0);
     size_t s, u, v;
     unsigned char *restrict tbuf;
     uintptr_t remaining = c->num_blocks;
 
     // Get H for gfmul
-    while(c->gctr((void*) zeroes_16, (void*)zeroes_16, &H, 1));
+    while(gctr(c->gctr, (void*) zeroes_16, &H, zero128, 1));
 
     // Get initial counter block J0
     J0 = getJ0(c, H);

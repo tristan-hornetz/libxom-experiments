@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sched.h>
 #include <immintrin.h>
 #include "libxom.h"
 
@@ -9,6 +10,11 @@
 #define CRESET "\e[0m"
 #define STR_WARN "[" YLL "WARNING" CRESET "] "
 #define STR_ERR "[" RED "ERROR" CRESET "] "
+
+typedef size_t (*hmac_fun) (
+        void *__attribute__((aligned(0x20))) padded_msg,
+        size_t block_count,
+        void *__attribute__((aligned(0x20))) out);
 
 // The function is located in the .data section, so we can overwrite
 // the immediate values of "mov" instructions
@@ -47,6 +53,18 @@ static keytype *const aes_key_ptrs[] = {
         keyptr(memenc_key_lo), keyptr(memenc_key_hi)
 };
 #undef keyptr
+
+static inline size_t call_hmac256(void *__attribute__((aligned(0x20))) padded_msg,
+        size_t block_count, void *__attribute__((aligned(0x20))) out, hmac_fun fun) {
+    size_t ret;
+    sched_yield();
+    // Backup r14, r15 and vector registers before calling, as any of them could be overwritten without
+    // warning while executing the function
+    asm volatile ("call *%1" : "=a"(ret) : "r"(fun), "D"(padded_msg), "S"(block_count), "d"(out) : "r14", "r15",
+            "ymm0", "ymm1", "ymm2", "ymm3", "ymm4", "ymm5", "ymm6", "ymm7", "ymm8", "ymm9", "ymm10", "ymm11", "ymm12",
+            "ymm13", "ymm14", "ymm15");
+    return ret;
+}
 
 // Add padding for SHA256
 static size_t pad_message_alloc(const void *orig, void **padded_dest, size_t len) {
@@ -110,8 +128,8 @@ int main(int argc, char *argv[]) {
     unsigned i;
 
 
-    if (argc <= 2) {
-        puts("Usage: hmac_sha256 KEY MESSAGE\n"
+    if (argc <= 2 || !strncmp(argv[1], "-h", sizeof("-h"))) {
+        puts("Usage: hmac_sha256 KEY MESSAGE\nhmac_sha256 KEY -f MESSAGE_FILE\n"
              "Note: The key cannot be longer than 64 bytes. "
              "If it is longer, the remaining bytes are discarded.");
         return 0;
@@ -192,7 +210,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Compute HMAC
-    if(hmac256_xom(padded_msg, block_count, hmac_dest)){
+    if(call_hmac256(padded_msg, block_count, hmac_dest, hmac256_xom)){
         puts("Failed!\n");
     }
 

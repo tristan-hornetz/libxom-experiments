@@ -10,22 +10,24 @@
 // x: %rsi
 // y: %rdx
 // num_blocks: %rcx
+// Overwrites %r14 and %r15 without saving, they must be backed up before calling!
 .global aes_gctr_linear
 aes_gctr_linear:
     // Backup callee-saved register
-    push %r15
+    xor %r15b, %r15b
 
     // Load key from immediates
 .global aes_key_lo
 aes_key_lo:
-    movq $0x1234567890abcdef,%r15
-    movq   %r15,%xmm0
+    movq $0x1234567890abcdef,%r14
+    movq   %r14,%xmm0
 .global aes_key_hi
 aes_key_hi:
-    movq $0x1234567890abcdef,%r15
-    movq   %r15,%xmm1
+    movq $0x1234567890abcdef,%r14
+    movq   %r14,%xmm1
     movlhps	%xmm1,%xmm0
-    xor %r15b, %r15b
+    xor %r14, %r14
+
 
     // Prepare for round key generation
     movaps %xmm0, %xmm1
@@ -122,7 +124,6 @@ aes_key_hi:
 
 
 .Laes_gctr_linear_enc_block:
-
     // Load counter block into xmm0
     movaps %xmm3, %xmm0
 
@@ -187,8 +188,6 @@ aes_key_hi:
     // Return the amount of remaining blocks
     mov %rcx, %rax
 
-    // Restore callee-saved register
-    pop %r15
     ret
 
 .global aes_gctr_linear_end
